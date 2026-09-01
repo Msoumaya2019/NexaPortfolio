@@ -12,6 +12,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - actualisation manuelle des cours ;
 - actualisation automatique à l’ouverture lorsque les cours ont plus de 15 minutes ;
 - dividendes sur douze mois, rendement en pourcentage, dernier versement et revenu annuel estimé pour chaque titre ;
+- prochaine date de détachement affichée dans la fiche de chaque action, avec une estimation fondée sur la cadence récente lorsqu’aucune date annoncée n’est disponible ;
 - synthèse des dividendes propre à chaque portefeuille ;
 - correction manuelle du prix moyen ou de la valeur totale d’achat de chaque position ;
 - graphiques de répartition avec Swift Charts ;
@@ -61,6 +62,6 @@ Le workflow `.github/workflows/build-unsigned-ipa.yml` fait la même compilation
 
 ## Source des cours
 
-La version 1.0 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
+La version 1.3 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
 
 Les données et calculs sont indicatifs et ne constituent pas un conseil financier.

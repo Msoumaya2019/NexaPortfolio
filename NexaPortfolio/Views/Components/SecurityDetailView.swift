@@ -10,6 +10,8 @@ struct SecurityDetailView: View {
     let dividendYieldPercent: Double
     let lastDividendPerShare: Double
     let lastDividendDate: Date?
+    let nextDividendDate: Date?
+    let nextDividendDateIsEstimated: Bool
     let dividendPaymentsLastTwelveMonths: Int
     var quantity: Double? = nil
     var fxRateToPortfolioCurrency: Double = 1
@@ -37,6 +39,7 @@ struct SecurityDetailView: View {
                         positionCard
                     }
                     dividendCard
+                    nextDividendCard
                     calculationNote
                 }
                 .padding(.horizontal, 16)
@@ -45,6 +48,48 @@ struct SecurityDetailView: View {
         }
         .navigationTitle(symbol)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var nextDividendCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Prochain dividende", systemImage: "calendar.badge.clock")
+                    .font(.headline)
+                Spacer()
+                if nextDividendDate != nil {
+                    Text(nextDividendDateIsEstimated ? "ESTIMATION" : "ANNONCÉE")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(nextDividendDateIsEstimated ? AppTheme.accent : AppTheme.positive)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(
+                            (nextDividendDateIsEstimated ? AppTheme.accent : AppTheme.positive).opacity(0.12),
+                            in: Capsule()
+                        )
+                }
+            }
+
+            if let nextDividendDate {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(nextDividendDateIsEstimated ? "Date de détachement estimée" : "Date de détachement annoncée")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(nextDividendDate.formatted(.dateTime.day().month(.wide).year()))
+                        .font(.title3.weight(.bold))
+                }
+
+                Text(nextDividendDateIsEstimated
+                     ? "Cette date est calculée d’après la cadence récente des dividendes et peut changer après l’annonce de l’entreprise."
+                     : "Cette date provient des données publiées pour le titre et peut encore être modifiée par l’entreprise.")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.secondaryText)
+            } else {
+                Text("Aucune prochaine date disponible pour ce titre.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .appCard()
     }
 
     private var positionCard: some View {
@@ -195,7 +240,7 @@ struct SecurityDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Méthode de calcul", systemImage: "info.circle")
                 .font(.subheadline.weight(.semibold))
-            Text("Le rendement correspond à la somme des dividendes en espèces des douze derniers mois, divisée par le cours actuel. Il est indicatif et ne garantit pas les versements futurs.")
+            Text("Le rendement correspond à la somme des dividendes en espèces des douze derniers mois, divisée par le cours actuel. La prochaine date est estimée à partir de la cadence récente lorsqu’aucune date annoncée n’est disponible. Ces informations sont indicatives et ne garantissent pas les versements futurs.")
                 .font(.footnote)
                 .foregroundStyle(AppTheme.secondaryText)
         }

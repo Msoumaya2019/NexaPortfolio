@@ -184,6 +184,8 @@ struct WatchlistsView: View {
                     dividendYieldPercent: item.dividendYieldPercent,
                     lastDividendPerShare: item.lastDividendPerShare,
                     lastDividendDate: item.lastDividendDate,
+                    nextDividendDate: item.nextDividendDate,
+                    nextDividendDateIsEstimated: item.nextDividendDateIsEstimated,
                     dividendPaymentsLastTwelveMonths: item.dividendPaymentsLastTwelveMonths
                 )
             } label: {
@@ -353,6 +355,8 @@ private struct AddWatchlistItemSheet: View {
             dividendYieldPercent: latestQuote?.dividendYieldPercent ?? 0,
             lastDividendPerShare: latestQuote?.lastDividendPerShare ?? 0,
             lastDividendDate: latestQuote?.lastDividendDate,
+            nextDividendDate: latestQuote?.nextDividendDate,
+            nextDividendDateIsEstimated: latestQuote?.nextDividendDateIsEstimated ?? true,
             dividendPaymentsLastTwelveMonths: latestQuote?.dividendPaymentsLastTwelveMonths ?? 0,
             watchlist: watchlist
         )

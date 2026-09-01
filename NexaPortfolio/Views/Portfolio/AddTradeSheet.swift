@@ -167,6 +167,8 @@ struct AddTradeSheet: View {
                 holding.dividendYieldPercent = quote.dividendYieldPercent
                 holding.lastDividendPerShare = quote.lastDividendPerShare
                 holding.lastDividendDate = quote.lastDividendDate
+                holding.nextDividendDate = quote.nextDividendDate
+                holding.nextDividendDateIsEstimated = quote.nextDividendDateIsEstimated
                 holding.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
                 holding.lastUpdated = quote.timestamp
                 try modelContext.save()

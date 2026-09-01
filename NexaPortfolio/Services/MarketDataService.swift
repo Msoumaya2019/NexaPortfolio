@@ -79,13 +79,22 @@ actor MarketDataClient {
             value: -366,
             to: timestamp
         ) ?? timestamp.addingTimeInterval(-31_622_400)
-        let allDividendEvents = result.events?.dividends.map { Array($0.values) } ?? []
-        let dividendEvents = allDividendEvents
-            .filter { Date(timeIntervalSince1970: TimeInterval($0.date)) >= cutoffDate }
+        let allDividendEvents = (result.events?.dividends.map { Array($0.values) } ?? [])
             .sorted { $0.date < $1.date }
+        let dividendEvents = allDividendEvents
+            .filter {
+                let eventDate = Date(timeIntervalSince1970: TimeInterval($0.date))
+                return eventDate >= cutoffDate && eventDate <= timestamp
+            }
         let annualDividend = dividendEvents.reduce(0) { $0 + $1.amount }
         let lastDividend = dividendEvents.last
         let dividendYieldPercent = price > 0 ? annualDividend / price * 100 : 0
+        let announcedNextDividend = allDividendEvents.first {
+            Date(timeIntervalSince1970: TimeInterval($0.date)) > timestamp
+        }
+        let nextDividendDate = announcedNextDividend
+            .map { Date(timeIntervalSince1970: TimeInterval($0.date)) }
+            ?? Self.estimatedNextDividendDate(from: dividendEvents, after: timestamp)
 
         return MarketQuote(
             symbol: result.meta.symbol ?? symbol,
@@ -98,8 +107,43 @@ actor MarketDataClient {
             dividendYieldPercent: dividendYieldPercent,
             lastDividendPerShare: lastDividend?.amount ?? 0,
             lastDividendDate: lastDividend.map { Date(timeIntervalSince1970: TimeInterval($0.date)) },
+            nextDividendDate: nextDividendDate,
+            nextDividendDateIsEstimated: announcedNextDividend == nil,
             dividendPaymentsLastTwelveMonths: dividendEvents.count
         )
+    }
+
+    private static func estimatedNextDividendDate(
+        from events: [YahooChartResponse.DividendEvent],
+        after referenceDate: Date
+    ) -> Date? {
+        guard let lastEvent = events.last else { return nil }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let dates = events.map { Date(timeIntervalSince1970: TimeInterval($0.date)) }
+        let recentDates = Array(dates.suffix(7))
+        let intervals = zip(recentDates, recentDates.dropFirst()).compactMap { pair -> Int? in
+            let days = calendar.dateComponents(
+                [.day],
+                from: calendar.startOfDay(for: pair.0),
+                to: calendar.startOfDay(for: pair.1)
+            ).day ?? 0
+            return (20...400).contains(days) ? days : nil
+        }.sorted()
+
+        // Un seul versement sur douze mois correspond le plus souvent à une cadence annuelle.
+        let cadenceDays = intervals.isEmpty ? 365 : intervals[intervals.count / 2]
+        var candidate = calendar.date(
+            byAdding: .day,
+            value: cadenceDays,
+            to: Date(timeIntervalSince1970: TimeInterval(lastEvent.date))
+        )
+
+        for _ in 0..<24 {
+            guard let date = candidate, date <= referenceDate else { break }
+            candidate = calendar.date(byAdding: .day, value: cadenceDays, to: date)
+        }
+        return candidate
     }
 
     func quotes(for symbols: [String]) async -> [String: MarketQuote] {
@@ -188,6 +232,8 @@ final class MarketDataStore: ObservableObject {
             holding.dividendYieldPercent = quote.dividendYieldPercent
             holding.lastDividendPerShare = quote.lastDividendPerShare
             holding.lastDividendDate = quote.lastDividendDate
+            holding.nextDividendDate = quote.nextDividendDate
+            holding.nextDividendDateIsEstimated = quote.nextDividendDateIsEstimated
             holding.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
             holding.lastUpdated = quote.timestamp
             if holding.displayName == holding.symbol { holding.displayName = quote.displayName }
@@ -213,6 +259,8 @@ final class MarketDataStore: ObservableObject {
             item.dividendYieldPercent = quote.dividendYieldPercent
             item.lastDividendPerShare = quote.lastDividendPerShare
             item.lastDividendDate = quote.lastDividendDate
+            item.nextDividendDate = quote.nextDividendDate
+            item.nextDividendDateIsEstimated = quote.nextDividendDateIsEstimated
             item.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
             item.lastUpdated = quote.timestamp
             if item.displayName == item.symbol { item.displayName = quote.displayName }

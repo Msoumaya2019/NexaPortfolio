@@ -37,6 +37,8 @@ enum PortfolioLedger {
         let dividendYield: Double
         let lastDividend: Double
         let lastDividendDate: Date?
+        let nextDividendDate: Date?
+        let nextDividendDateIsEstimated: Bool
         let paymentCount: Int
         let manualAverageCost: Double?
     }
@@ -150,6 +152,8 @@ enum PortfolioLedger {
                 dividendYield: $0.dividendYieldPercent,
                 lastDividend: $0.lastDividendPerShare,
                 lastDividendDate: $0.lastDividendDate,
+                nextDividendDate: $0.nextDividendDate,
+                nextDividendDateIsEstimated: $0.nextDividendDateIsEstimated,
                 paymentCount: $0.dividendPaymentsLastTwelveMonths,
                 manualAverageCost: $0.manualAverageCost
             ))
@@ -211,6 +215,8 @@ enum PortfolioLedger {
                 dividendYieldPercent: snapshot?.dividendYield ?? 0,
                 lastDividendPerShare: snapshot?.lastDividend ?? 0,
                 lastDividendDate: snapshot?.lastDividendDate,
+                nextDividendDate: snapshot?.nextDividendDate,
+                nextDividendDateIsEstimated: snapshot?.nextDividendDateIsEstimated ?? true,
                 dividendPaymentsLastTwelveMonths: snapshot?.paymentCount ?? 0,
                 portfolio: portfolio
             )

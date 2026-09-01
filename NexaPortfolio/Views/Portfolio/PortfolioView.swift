@@ -294,6 +294,8 @@ struct PortfolioView: View {
                     dividendYieldPercent: holding.dividendYieldPercent,
                     lastDividendPerShare: holding.lastDividendPerShare,
                     lastDividendDate: holding.lastDividendDate,
+                    nextDividendDate: holding.nextDividendDate,
+                    nextDividendDateIsEstimated: holding.nextDividendDateIsEstimated,
                     dividendPaymentsLastTwelveMonths: holding.dividendPaymentsLastTwelveMonths,
                     quantity: holding.quantity,
                     fxRateToPortfolioCurrency: holding.fxRateToPortfolioCurrency,

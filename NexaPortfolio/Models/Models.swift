@@ -68,6 +68,8 @@ final class Holding {
     var dividendYieldPercent: Double = 0
     var lastDividendPerShare: Double = 0
     var lastDividendDate: Date?
+    var nextDividendDate: Date?
+    var nextDividendDateIsEstimated: Bool = true
     var dividendPaymentsLastTwelveMonths: Int = 0
     var lastUpdated: Date?
     var portfolio: Portfolio?
@@ -84,6 +86,8 @@ final class Holding {
         dividendYieldPercent: Double = 0,
         lastDividendPerShare: Double = 0,
         lastDividendDate: Date? = nil,
+        nextDividendDate: Date? = nil,
+        nextDividendDateIsEstimated: Bool = true,
         dividendPaymentsLastTwelveMonths: Int = 0,
         portfolio: Portfolio? = nil
     ) {
@@ -101,6 +105,8 @@ final class Holding {
         self.dividendYieldPercent = dividendYieldPercent
         self.lastDividendPerShare = lastDividendPerShare
         self.lastDividendDate = lastDividendDate
+        self.nextDividendDate = nextDividendDate
+        self.nextDividendDateIsEstimated = nextDividendDateIsEstimated
         self.dividendPaymentsLastTwelveMonths = dividendPaymentsLastTwelveMonths
         self.lastUpdated = nil
         self.portfolio = portfolio
@@ -229,6 +235,8 @@ final class WatchlistItem {
     var dividendYieldPercent: Double = 0
     var lastDividendPerShare: Double = 0
     var lastDividendDate: Date?
+    var nextDividendDate: Date?
+    var nextDividendDateIsEstimated: Bool = true
     var dividendPaymentsLastTwelveMonths: Int = 0
     var addedAt: Date
     var lastUpdated: Date?
@@ -244,6 +252,8 @@ final class WatchlistItem {
         dividendYieldPercent: Double = 0,
         lastDividendPerShare: Double = 0,
         lastDividendDate: Date? = nil,
+        nextDividendDate: Date? = nil,
+        nextDividendDateIsEstimated: Bool = true,
         dividendPaymentsLastTwelveMonths: Int = 0,
         watchlist: Watchlist? = nil
     ) {
@@ -257,6 +267,8 @@ final class WatchlistItem {
         self.dividendYieldPercent = dividendYieldPercent
         self.lastDividendPerShare = lastDividendPerShare
         self.lastDividendDate = lastDividendDate
+        self.nextDividendDate = nextDividendDate
+        self.nextDividendDateIsEstimated = nextDividendDateIsEstimated
         self.dividendPaymentsLastTwelveMonths = dividendPaymentsLastTwelveMonths
         self.addedAt = .now
         self.lastUpdated = nil
@@ -282,6 +294,8 @@ struct MarketQuote: Sendable {
     let dividendYieldPercent: Double
     let lastDividendPerShare: Double
     let lastDividendDate: Date?
+    let nextDividendDate: Date?
+    let nextDividendDateIsEstimated: Bool
     let dividendPaymentsLastTwelveMonths: Int
 
     var changePercent: Double {
