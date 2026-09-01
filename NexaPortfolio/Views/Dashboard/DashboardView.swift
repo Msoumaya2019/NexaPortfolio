@@ -1,0 +1,262 @@
+import SwiftUI
+import SwiftData
+import Charts
+
+struct DashboardView: View {
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var marketData: MarketDataStore
+
+    @Query(sort: \Portfolio.createdAt) private var portfolios: [Portfolio]
+    @Query(sort: \Holding.symbol) private var holdings: [Holding]
+    @Query(sort: \WatchlistItem.addedAt) private var watchlistItems: [WatchlistItem]
+    @Query(sort: \TradeTransaction.date, order: .reverse) private var transactions: [TradeTransaction]
+
+    @AppStorage("hideBalances") private var hideBalances = false
+    @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
+
+    private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
+    private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
+    private var totalCost: Double { portfolios.reduce(0) { $0 + $1.costBasis } }
+    private var totalGain: Double { totalValue - portfolios.reduce(0) { $0 + $1.cashBalance } - totalCost }
+    private var dailyGain: Double {
+        holdings.reduce(0) {
+            $0 + ($1.currentPrice - $1.previousClose) * $1.quantity * $1.fxRateToPortfolioCurrency
+        }
+    }
+
+    private var dailyGainPercent: Double {
+        let previousValue = holdings.reduce(0) {
+            $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
+        }
+        guard previousValue > 0 else { return 0 }
+        return dailyGain / previousValue * 100
+    }
+
+    var body: some View {
+        ZStack {
+            AppTheme.background.ignoresSafeArea()
+
+            ScrollView {
+                LazyVStack(spacing: 18) {
+                    heroCard
+
+                    if holdings.isEmpty {
+                        EmptyStateView(
+                            icon: "chart.pie.fill",
+                            title: "Ton portefeuille est prêt",
+                            message: "Ajoute une première transaction pour voir la répartition et les performances."
+                        )
+                        .appCard()
+                    } else {
+                        allocationCard
+                        topMoversCard
+                    }
+
+                    recentActivityCard
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
+            }
+            .refreshable { await refreshQuotes() }
+        }
+        .navigationTitle("Nexa Portfolio")
+        .task {
+            if refreshOnLaunch, holdings.contains(where: { $0.lastUpdated == nil }) {
+                await refreshQuotes()
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    hideBalances.toggle()
+                } label: {
+                    Image(systemName: hideBalances ? "eye.slash" : "eye")
+                }
+                .accessibilityLabel(hideBalances ? "Afficher les montants" : "Masquer les montants")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await refreshQuotes() }
+                } label: {
+                    if marketData.isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+                .disabled(marketData.isRefreshing)
+                .accessibilityLabel("Actualiser les cours")
+            }
+        }
+        .alert("Actualisation", isPresented: Binding(
+            get: { marketData.errorMessage != nil },
+            set: { if !$0 { marketData.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { marketData.errorMessage = nil }
+        } message: {
+            Text(marketData.errorMessage ?? "")
+        }
+    }
+
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Valeur totale", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                Spacer()
+                ChangeBadge(value: dailyGainPercent)
+            }
+
+            Text(hideBalances ? "••••••" : totalValue.currency(primaryCurrency))
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .contentTransition(.numericText())
+
+            HStack(spacing: 24) {
+                metric(title: "Aujourd’hui", value: dailyGain, color: dailyGain >= 0 ? AppTheme.positive : AppTheme.negative)
+                metric(title: "Non réalisé", value: totalGain, color: totalGain >= 0 ? AppTheme.positive : AppTheme.negative)
+            }
+        }
+        .padding(20)
+        .background {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.10, green: 0.25, blue: 0.31), AppTheme.card],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(AppTheme.accent.opacity(0.14))
+                        .frame(width: 170, height: 170)
+                        .blur(radius: 10)
+                        .offset(x: 55, y: -65)
+                }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(AppTheme.accent.opacity(0.18), lineWidth: 1)
+        }
+    }
+
+    private func metric(title: String, value: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(hideBalances ? "••••" : value.currency(primaryCurrency))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(color)
+        }
+    }
+
+    private var allocationCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Répartition")
+                .font(.headline)
+
+            HStack(spacing: 20) {
+                Chart(holdings.prefix(8)) { holding in
+                    SectorMark(
+                        angle: .value("Valeur", holding.marketValueInPortfolioCurrency),
+                        innerRadius: .ratio(0.68),
+                        angularInset: 2
+                    )
+                    .cornerRadius(4)
+                    .foregroundStyle(by: .value("Symbole", holding.symbol))
+                }
+                .chartLegend(.hidden)
+                .frame(width: 126, height: 126)
+
+                VStack(spacing: 10) {
+                    ForEach(Array(holdings.sorted { $0.marketValue > $1.marketValue }.prefix(4).enumerated()), id: \.element.id) { index, holding in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(AppTheme.allocationColors[index % AppTheme.allocationColors.count])
+                                .frame(width: 8, height: 8)
+                            Text(holding.symbol)
+                                .font(.caption.weight(.semibold))
+                            Spacer()
+                            Text(totalValue > 0 ? holding.marketValueInPortfolioCurrency / totalValue : 0, format: .percent.precision(.fractionLength(1)))
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private var topMoversCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Positions")
+                .font(.headline)
+
+            ForEach(holdings.sorted { abs($0.dailyChangePercent) > abs($1.dailyChangePercent) }.prefix(4)) { holding in
+                HStack(spacing: 12) {
+                    SymbolBadge(symbol: holding.symbol)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(holding.symbol)
+                            .font(.subheadline.weight(.bold))
+                        Text(holding.displayName)
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(holding.currentPrice.currency(holding.currencyCode))
+                            .font(.subheadline.weight(.semibold))
+                        Text(holding.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(holding.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private var recentActivityCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Activité récente")
+                .font(.headline)
+
+            if transactions.isEmpty {
+                Text("Aucune transaction enregistrée.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.vertical, 10)
+            } else {
+                ForEach(transactions.prefix(5)) { transaction in
+                    HStack(spacing: 12) {
+                        Image(systemName: transaction.kind.systemImage)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.accent.opacity(0.1), in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(transaction.kind.title) · \(transaction.symbol)")
+                                .font(.subheadline.weight(.semibold))
+                            Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+                        Spacer()
+                        Text(transaction.grossAmount.currency(transaction.currencyCode))
+                            .font(.subheadline.monospacedDigit())
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private func refreshQuotes() async {
+        await marketData.refresh(holdings: holdings, watchlistItems: watchlistItems, context: modelContext)
+    }
+}
