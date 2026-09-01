@@ -10,6 +10,7 @@ struct PortfolioView: View {
     @State private var showingNewPortfolio = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
+    @State private var editingHolding: Holding?
 
     private var selectedPortfolio: Portfolio? {
         portfolios.first { $0.id == selectedPortfolioID } ?? portfolios.first
@@ -24,6 +25,7 @@ struct PortfolioView: View {
                     LazyVStack(spacing: 18) {
                         portfolioSelector(portfolio)
                         summaryCard(portfolio)
+                        portfolioDividendCard(portfolio)
                         holdingsCard(portfolio)
                         transactionsCard(portfolio)
                     }
@@ -84,6 +86,9 @@ struct PortfolioView: View {
             NewPortfolioSheet { portfolio in
                 selectedPortfolioID = portfolio.id
             }
+        }
+        .sheet(item: $editingHolding) { holding in
+            PurchasePriceEditor(holding: holding)
         }
         .confirmationDialog(
             "Supprimer « \(selectedPortfolio?.name ?? "") » ?",
@@ -183,6 +188,67 @@ struct PortfolioView: View {
         }
     }
 
+    private func portfolioDividendCard(_ portfolio: Portfolio) -> some View {
+        let annualIncome = portfolio.holdings.reduce(0) { $0 + $1.estimatedAnnualDividendIncome }
+        let monthlyAverage = annualIncome / 12
+        let yieldPercent = portfolio.holdingsValue > 0
+            ? annualIncome / portfolio.holdingsValue * 100
+            : 0
+        let dividendHoldings = portfolio.holdings
+            .filter { $0.dividendYieldPercent > 0 }
+            .sorted { $0.estimatedAnnualDividendIncome > $1.estimatedAnnualDividendIncome }
+
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Dividendes du portefeuille", systemImage: "banknote.fill")
+                    .font(.headline)
+                Spacer()
+                DividendBadge(yieldPercent: yieldPercent)
+            }
+
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Estimation annuelle")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(annualIncome.currency(portfolio.currencyCode))
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(AppTheme.positive)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Moyenne mensuelle")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(monthlyAverage.currency(portfolio.currencyCode))
+                        .font(.subheadline.weight(.bold))
+                }
+            }
+
+            if dividendHoldings.isEmpty {
+                Text("Aucun dividende détecté dans ce portefeuille sur les douze derniers mois.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+            } else {
+                Divider().overlay(Color.white.opacity(0.06))
+
+                ForEach(dividendHoldings.prefix(4)) { holding in
+                    HStack {
+                        Text(holding.symbol)
+                            .font(.subheadline.weight(.bold))
+                        Text(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2)))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.accent)
+                        Spacer()
+                        Text(holding.estimatedAnnualDividendIncome.currency(portfolio.currencyCode))
+                            .font(.subheadline.monospacedDigit())
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
     private func holdingsCard(_ portfolio: Portfolio) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -216,47 +282,58 @@ struct PortfolioView: View {
     }
 
     private func holdingRow(_ holding: Holding) -> some View {
-        NavigationLink {
-            SecurityDetailView(
-                symbol: holding.symbol,
-                displayName: holding.displayName,
-                currentPrice: holding.currentPrice,
-                previousClose: holding.previousClose,
-                currencyCode: holding.currencyCode,
-                annualDividendPerShare: holding.annualDividendPerShare,
-                dividendYieldPercent: holding.dividendYieldPercent,
-                lastDividendPerShare: holding.lastDividendPerShare,
-                lastDividendDate: holding.lastDividendDate,
-                dividendPaymentsLastTwelveMonths: holding.dividendPaymentsLastTwelveMonths,
-                quantity: holding.quantity,
-                fxRateToPortfolioCurrency: holding.fxRateToPortfolioCurrency,
-                portfolioCurrencyCode: holding.portfolio?.currencyCode
-            )
-        } label: {
-            HStack(spacing: 12) {
-                SymbolBadge(symbol: holding.symbol)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(holding.symbol)
-                        .font(.subheadline.weight(.bold))
-                    Text("\(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.secondaryText)
-                    DividendBadge(yieldPercent: holding.dividendYieldPercent)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(holding.marketValue.currency(holding.currencyCode))
-                        .font(.subheadline.weight(.semibold))
-                    Text(holding.unrealizedGainPercent / 100, format: .percent.precision(.fractionLength(2)))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(holding.unrealizedGainPercent >= 0 ? AppTheme.positive : AppTheme.negative)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(AppTheme.secondaryText)
+        HStack(spacing: 8) {
+            NavigationLink {
+                SecurityDetailView(
+                    symbol: holding.symbol,
+                    displayName: holding.displayName,
+                    currentPrice: holding.currentPrice,
+                    previousClose: holding.previousClose,
+                    currencyCode: holding.currencyCode,
+                    annualDividendPerShare: holding.annualDividendPerShare,
+                    dividendYieldPercent: holding.dividendYieldPercent,
+                    lastDividendPerShare: holding.lastDividendPerShare,
+                    lastDividendDate: holding.lastDividendDate,
+                    dividendPaymentsLastTwelveMonths: holding.dividendPaymentsLastTwelveMonths,
+                    quantity: holding.quantity,
+                    fxRateToPortfolioCurrency: holding.fxRateToPortfolioCurrency,
+                    portfolioCurrencyCode: holding.portfolio?.currencyCode,
+                    averagePurchasePrice: holding.purchasePrice
+                )
+            } label: {
+                HStack(spacing: 12) {
+                    SymbolBadge(symbol: holding.symbol)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(holding.symbol)
+                            .font(.subheadline.weight(.bold))
+                        Text("\(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres · PRU \(holding.purchasePrice.currency(holding.currencyCode))")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .lineLimit(1)
+                        DividendBadge(yieldPercent: holding.dividendYieldPercent)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(holding.marketValue.currency(holding.currencyCode))
+                            .font(.subheadline.weight(.semibold))
+                        Text(holding.unrealizedGainPercent / 100, format: .percent.precision(.fractionLength(2)))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(holding.unrealizedGainPercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                    }
                 }
             }
+            .buttonStyle(.plain)
+
+            Button {
+                editingHolding = holding
+            } label: {
+                Image(systemName: "pencil.circle")
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.accent)
+                    .frame(width: 34, height: 42)
+            }
+            .accessibilityLabel("Modifier le prix d’achat de \(holding.symbol)")
         }
-        .buttonStyle(.plain)
     }
 
     private func transactionsCard(_ portfolio: Portfolio) -> some View {
@@ -319,6 +396,164 @@ struct PortfolioView: View {
         do {
             try modelContext.save()
             selectedPortfolioID = portfolios.first { $0.id != portfolio.id }?.id
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum PurchaseValueInputMode: String, CaseIterable, Identifiable {
+    case pricePerShare
+    case totalValue
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pricePerShare: return "Prix par action"
+        case .totalValue: return "Valeur totale"
+        }
+    }
+}
+
+private struct PurchasePriceEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let holding: Holding
+
+    @State private var inputMode: PurchaseValueInputMode = .pricePerShare
+    @State private var amountText: String
+    @State private var errorMessage: String?
+
+    init(holding: Holding) {
+        self.holding = holding
+        _amountText = State(
+            initialValue: holding.purchasePrice.formatted(
+                .number.precision(.fractionLength(2...6))
+            )
+        )
+    }
+
+    private var parsedAmount: Double? {
+        Double(amountText.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private var editedPurchasePrice: Double? {
+        guard let amount = parsedAmount, amount >= 0 else { return nil }
+        switch inputMode {
+        case .pricePerShare:
+            return amount
+        case .totalValue:
+            guard holding.quantity > 0 else { return nil }
+            return amount / holding.quantity
+        }
+    }
+
+    private var editedTotalValue: Double {
+        (editedPurchasePrice ?? 0) * holding.quantity
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Position") {
+                    LabeledContent("Titre", value: holding.symbol)
+                    LabeledContent(
+                        "Quantité",
+                        value: holding.quantity.formatted(.number.precision(.fractionLength(0...4)))
+                    )
+                    LabeledContent("Devise", value: holding.currencyCode)
+                }
+
+                Section("Valeur d’achat") {
+                    Picker("Mode de saisie", selection: $inputMode) {
+                        ForEach(PurchaseValueInputMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: inputMode) { _, newMode in
+                        switch newMode {
+                        case .pricePerShare:
+                            amountText = holding.purchasePrice.formatted(
+                                .number.precision(.fractionLength(2...6))
+                            )
+                        case .totalValue:
+                            amountText = holding.costBasis.formatted(
+                                .number.precision(.fractionLength(2...6))
+                            )
+                        }
+                    }
+
+                    TextField(
+                        inputMode == .pricePerShare ? "Prix moyen par action" : "Valeur totale investie",
+                        text: $amountText
+                    )
+                    .keyboardType(.decimalPad)
+
+                    LabeledContent(
+                        "Prix moyen obtenu",
+                        value: (editedPurchasePrice ?? 0).currency(holding.currencyCode)
+                    )
+                    LabeledContent(
+                        "Valeur totale obtenue",
+                        value: editedTotalValue.currency(holding.currencyCode)
+                    )
+                }
+
+                Section {
+                    Text("Cette correction modifie le prix moyen utilisé pour les gains et pertes, sans changer l’historique des transactions.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    if holding.manualAverageCost != nil {
+                        Button {
+                            restoreTransactionValue()
+                        } label: {
+                            Label("Rétablir la valeur calculée", systemImage: "arrow.counterclockwise")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Modifier \(holding.symbol)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Enregistrer") { save() }
+                        .disabled(editedPurchasePrice == nil)
+                }
+            }
+            .alert("Modification impossible", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private func save() {
+        guard let editedPurchasePrice else { return }
+        holding.manualAverageCost = editedPurchasePrice
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func restoreTransactionValue() {
+        holding.manualAverageCost = nil
+        do {
+            try modelContext.save()
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }

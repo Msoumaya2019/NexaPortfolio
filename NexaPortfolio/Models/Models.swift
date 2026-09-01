@@ -59,6 +59,7 @@ final class Holding {
     var displayName: String
     var quantity: Double
     var averageCost: Double
+    var manualAverageCost: Double? = nil
     var currentPrice: Double
     var previousClose: Double
     var currencyCode: String
@@ -91,6 +92,7 @@ final class Holding {
         self.displayName = displayName
         self.quantity = quantity
         self.averageCost = averageCost
+        self.manualAverageCost = nil
         self.currentPrice = currentPrice
         self.previousClose = previousClose ?? currentPrice
         self.currencyCode = currencyCode
@@ -105,7 +107,8 @@ final class Holding {
     }
 
     var marketValue: Double { quantity * currentPrice }
-    var costBasis: Double { quantity * averageCost }
+    var purchasePrice: Double { manualAverageCost ?? averageCost }
+    var costBasis: Double { quantity * purchasePrice }
     var marketValueInPortfolioCurrency: Double { marketValue * fxRateToPortfolioCurrency }
     var costBasisInPortfolioCurrency: Double { costBasis * fxRateToPortfolioCurrency }
     var unrealizedGain: Double { marketValueInPortfolioCurrency - costBasisInPortfolioCurrency }

@@ -38,6 +38,7 @@ enum PortfolioLedger {
         let lastDividend: Double
         let lastDividendDate: Date?
         let paymentCount: Int
+        let manualAverageCost: Double?
     }
 
     @MainActor
@@ -67,10 +68,11 @@ enum PortfolioLedger {
         switch kind {
         case .buy:
             if let holding = existing {
-                let oldCost = holding.averageCost * holding.quantity
+                let oldCost = holding.purchasePrice * holding.quantity
                 let addedCost = price * quantity + fees
                 holding.quantity += quantity
                 holding.averageCost = (oldCost + addedCost) / holding.quantity
+                holding.manualAverageCost = nil
                 if holding.currentPrice == 0 { holding.currentPrice = price }
                 if holding.previousClose == 0 { holding.previousClose = price }
                 holding.currencyCode = currencyCode
@@ -148,7 +150,8 @@ enum PortfolioLedger {
                 dividendYield: $0.dividendYieldPercent,
                 lastDividend: $0.lastDividendPerShare,
                 lastDividendDate: $0.lastDividendDate,
-                paymentCount: $0.dividendPaymentsLastTwelveMonths
+                paymentCount: $0.dividendPaymentsLastTwelveMonths,
+                manualAverageCost: $0.manualAverageCost
             ))
         })
 
@@ -213,6 +216,7 @@ enum PortfolioLedger {
             )
             holding.fxRateToPortfolioCurrency = snapshot?.fxRate ?? 1
             holding.lastUpdated = snapshot?.lastUpdated
+            holding.manualAverageCost = snapshot?.manualAverageCost
             context.insert(holding)
         }
 

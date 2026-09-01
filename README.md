@@ -12,6 +12,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - actualisation manuelle des cours ;
 - actualisation automatique à l’ouverture lorsque les cours ont plus de 15 minutes ;
 - dividendes sur douze mois, rendement en pourcentage, dernier versement et revenu annuel estimé pour chaque titre ;
+- synthèse des dividendes propre à chaque portefeuille ;
+- correction manuelle du prix moyen ou de la valeur totale d’achat de chaque position ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;

@@ -14,6 +14,7 @@ struct SecurityDetailView: View {
     var quantity: Double? = nil
     var fxRateToPortfolioCurrency: Double = 1
     var portfolioCurrencyCode: String? = nil
+    var averagePurchasePrice: Double? = nil
 
     private var dailyChangePercent: Double {
         guard previousClose > 0 else { return 0 }
@@ -32,6 +33,9 @@ struct SecurityDetailView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     priceCard
+                    if quantity != nil {
+                        positionCard
+                    }
                     dividendCard
                     calculationNote
                 }
@@ -41,6 +45,46 @@ struct SecurityDetailView: View {
         }
         .navigationTitle(symbol)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var positionCard: some View {
+        let positionQuantity = quantity ?? 0
+        let purchasePrice = averagePurchasePrice ?? 0
+        let targetCurrency = portfolioCurrencyCode ?? currencyCode
+        let investedValue = purchasePrice * positionQuantity * fxRateToPortfolioCurrency
+        let currentValue = currentPrice * positionQuantity * fxRateToPortfolioCurrency
+        let gain = currentValue - investedValue
+
+        return VStack(alignment: .leading, spacing: 16) {
+            Label("Ma position", systemImage: "briefcase.fill")
+                .font(.headline)
+
+            HStack(alignment: .top, spacing: 16) {
+                dividendMetric(
+                    title: "Quantité",
+                    value: positionQuantity.formatted(.number.precision(.fractionLength(0...4)))
+                )
+                dividendMetric(
+                    title: "Prix d’achat moyen",
+                    value: purchasePrice.currency(currencyCode)
+                )
+                dividendMetric(
+                    title: "Valeur investie",
+                    value: investedValue.currency(targetCurrency)
+                )
+            }
+
+            HStack {
+                Text("Gain/perte non réalisé")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                Spacer()
+                Text(gain.currency(targetCurrency))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(gain >= 0 ? AppTheme.positive : AppTheme.negative)
+            }
+        }
+        .appCard()
     }
 
     private var priceCard: some View {

@@ -43,7 +43,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.1.0")
+                    LabeledContent("Version", value: "1.2.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
@@ -74,7 +74,7 @@ struct SettingsView: View {
                     holding.symbol,
                     holding.displayName,
                     String(holding.quantity),
-                    String(holding.averageCost),
+                    String(holding.purchasePrice),
                     String(holding.currentPrice),
                     holding.currencyCode,
                     String(holding.annualDividendPerShare),
