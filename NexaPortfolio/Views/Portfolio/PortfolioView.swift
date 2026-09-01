@@ -216,24 +216,47 @@ struct PortfolioView: View {
     }
 
     private func holdingRow(_ holding: Holding) -> some View {
-        HStack(spacing: 12) {
-            SymbolBadge(symbol: holding.symbol)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(holding.symbol)
-                    .font(.subheadline.weight(.bold))
-                Text("\(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(holding.marketValue.currency(holding.currencyCode))
-                    .font(.subheadline.weight(.semibold))
-                Text(holding.unrealizedGainPercent / 100, format: .percent.precision(.fractionLength(2)))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(holding.unrealizedGainPercent >= 0 ? AppTheme.positive : AppTheme.negative)
+        NavigationLink {
+            SecurityDetailView(
+                symbol: holding.symbol,
+                displayName: holding.displayName,
+                currentPrice: holding.currentPrice,
+                previousClose: holding.previousClose,
+                currencyCode: holding.currencyCode,
+                annualDividendPerShare: holding.annualDividendPerShare,
+                dividendYieldPercent: holding.dividendYieldPercent,
+                lastDividendPerShare: holding.lastDividendPerShare,
+                lastDividendDate: holding.lastDividendDate,
+                dividendPaymentsLastTwelveMonths: holding.dividendPaymentsLastTwelveMonths,
+                quantity: holding.quantity,
+                fxRateToPortfolioCurrency: holding.fxRateToPortfolioCurrency,
+                portfolioCurrencyCode: holding.portfolio?.currencyCode
+            )
+        } label: {
+            HStack(spacing: 12) {
+                SymbolBadge(symbol: holding.symbol)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(holding.symbol)
+                        .font(.subheadline.weight(.bold))
+                    Text("\(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                    DividendBadge(yieldPercent: holding.dividendYieldPercent)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(holding.marketValue.currency(holding.currencyCode))
+                        .font(.subheadline.weight(.semibold))
+                    Text(holding.unrealizedGainPercent / 100, format: .percent.precision(.fractionLength(2)))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(holding.unrealizedGainPercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
             }
         }
+        .buttonStyle(.plain)
     }
 
     private func transactionsCard(_ portfolio: Portfolio) -> some View {

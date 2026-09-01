@@ -20,6 +20,7 @@ struct AddTradeSheet: View {
     @State private var showingSearch = false
     @State private var isLoadingQuote = false
     @State private var errorMessage: String?
+    @State private var latestQuote: MarketQuote?
 
     init(portfolio: Portfolio) {
         self.portfolio = portfolio
@@ -128,6 +129,7 @@ struct AddTradeSheet: View {
         Task {
             do {
                 let quote = try await marketData.quote(for: symbol)
+                latestQuote = quote
                 price = quote.price.formatted(.number.precision(.fractionLength(2...6)))
                 currencyCode = quote.currencyCode
                 if displayName.isEmpty { displayName = quote.displayName }
@@ -153,6 +155,22 @@ struct AddTradeSheet: View {
                 in: portfolio,
                 context: modelContext
             )
+
+            let normalizedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if let quote = latestQuote,
+               quote.symbol.uppercased() == normalizedSymbol,
+               let holding = portfolio.holdings.first(where: { $0.symbol == normalizedSymbol }) {
+                holding.currentPrice = quote.price
+                holding.previousClose = quote.previousClose
+                holding.currencyCode = quote.currencyCode
+                holding.annualDividendPerShare = quote.annualDividendPerShare
+                holding.dividendYieldPercent = quote.dividendYieldPercent
+                holding.lastDividendPerShare = quote.lastDividendPerShare
+                holding.lastDividendDate = quote.lastDividendDate
+                holding.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
+                holding.lastUpdated = quote.timestamp
+                try modelContext.save()
+            }
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

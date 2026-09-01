@@ -27,6 +27,19 @@ enum PortfolioLedger {
         var currencyCode: String
     }
 
+    private struct HoldingSnapshot {
+        let currentPrice: Double
+        let previousClose: Double
+        let currencyCode: String
+        let fxRate: Double
+        let lastUpdated: Date?
+        let annualDividend: Double
+        let dividendYield: Double
+        let lastDividend: Double
+        let lastDividendDate: Date?
+        let paymentCount: Int
+    }
+
     @MainActor
     static func record(
         kind: TransactionKind,
@@ -125,7 +138,18 @@ enum PortfolioLedger {
         context: ModelContext
     ) throws {
         let quoteSnapshots = Dictionary(uniqueKeysWithValues: portfolio.holdings.map {
-            ($0.symbol, ($0.currentPrice, $0.previousClose, $0.currencyCode, $0.fxRateToPortfolioCurrency, $0.lastUpdated))
+            ($0.symbol, HoldingSnapshot(
+                currentPrice: $0.currentPrice,
+                previousClose: $0.previousClose,
+                currencyCode: $0.currencyCode,
+                fxRate: $0.fxRateToPortfolioCurrency,
+                lastUpdated: $0.lastUpdated,
+                annualDividend: $0.annualDividendPerShare,
+                dividendYield: $0.dividendYieldPercent,
+                lastDividend: $0.lastDividendPerShare,
+                lastDividendDate: $0.lastDividendDate,
+                paymentCount: $0.dividendPaymentsLastTwelveMonths
+            ))
         })
 
         for holding in portfolio.holdings {
@@ -177,13 +201,18 @@ enum PortfolioLedger {
                 displayName: state.displayName,
                 quantity: state.quantity,
                 averageCost: state.totalCost / state.quantity,
-                currentPrice: snapshot?.0 ?? state.lastPrice,
-                previousClose: snapshot?.1 ?? state.lastPrice,
-                currencyCode: snapshot?.2 ?? state.currencyCode,
+                currentPrice: snapshot?.currentPrice ?? state.lastPrice,
+                previousClose: snapshot?.previousClose ?? state.lastPrice,
+                currencyCode: snapshot?.currencyCode ?? state.currencyCode,
+                annualDividendPerShare: snapshot?.annualDividend ?? 0,
+                dividendYieldPercent: snapshot?.dividendYield ?? 0,
+                lastDividendPerShare: snapshot?.lastDividend ?? 0,
+                lastDividendDate: snapshot?.lastDividendDate,
+                dividendPaymentsLastTwelveMonths: snapshot?.paymentCount ?? 0,
                 portfolio: portfolio
             )
-            holding.fxRateToPortfolioCurrency = snapshot?.3 ?? 1
-            holding.lastUpdated = snapshot?.4
+            holding.fxRateToPortfolioCurrency = snapshot?.fxRate ?? 1
+            holding.lastUpdated = snapshot?.lastUpdated
             context.insert(holding)
         }
 

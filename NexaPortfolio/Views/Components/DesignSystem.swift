@@ -53,6 +53,29 @@ struct ChangeBadge: View {
     }
 }
 
+struct DividendBadge: View {
+    let yieldPercent: Double
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "banknote.fill")
+            if yieldPercent > 0 {
+                Text("Div. \(yieldPercent / 100, format: .percent.precision(.fractionLength(2)))")
+            } else {
+                Text("Aucun dividende")
+            }
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(yieldPercent > 0 ? AppTheme.accent : AppTheme.secondaryText)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            (yieldPercent > 0 ? AppTheme.accent : Color.white).opacity(0.09),
+            in: Capsule()
+        )
+    }
+}
+
 struct SymbolBadge: View {
     let symbol: String
     var size: CGFloat = 42

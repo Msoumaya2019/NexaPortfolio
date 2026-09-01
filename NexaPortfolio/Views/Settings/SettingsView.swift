@@ -43,7 +43,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.0.0")
+                    LabeledContent("Version", value: "1.1.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
@@ -64,7 +64,7 @@ struct SettingsView: View {
             "Nexa Portfolio — export du \(Date.now.formatted(date: .abbreviated, time: .shortened))",
             "",
             "POSITIONS",
-            "Portefeuille;Symbole;Nom;Quantité;Prix moyen;Cours;Devise"
+            "Portefeuille;Symbole;Nom;Quantité;Prix moyen;Cours;Devise;Dividende annuel/action;Rendement dividende (%)"
         ]
 
         for portfolio in portfolios {
@@ -76,7 +76,9 @@ struct SettingsView: View {
                     String(holding.quantity),
                     String(holding.averageCost),
                     String(holding.currentPrice),
-                    holding.currencyCode
+                    holding.currencyCode,
+                    String(holding.annualDividendPerShare),
+                    String(holding.dividendYieldPercent)
                 ].map(csvEscape).joined(separator: ";"))
             }
         }

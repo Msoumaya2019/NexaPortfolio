@@ -63,6 +63,11 @@ final class Holding {
     var previousClose: Double
     var currencyCode: String
     var fxRateToPortfolioCurrency: Double
+    var annualDividendPerShare: Double = 0
+    var dividendYieldPercent: Double = 0
+    var lastDividendPerShare: Double = 0
+    var lastDividendDate: Date?
+    var dividendPaymentsLastTwelveMonths: Int = 0
     var lastUpdated: Date?
     var portfolio: Portfolio?
 
@@ -74,6 +79,11 @@ final class Holding {
         currentPrice: Double,
         previousClose: Double? = nil,
         currencyCode: String = "EUR",
+        annualDividendPerShare: Double = 0,
+        dividendYieldPercent: Double = 0,
+        lastDividendPerShare: Double = 0,
+        lastDividendDate: Date? = nil,
+        dividendPaymentsLastTwelveMonths: Int = 0,
         portfolio: Portfolio? = nil
     ) {
         self.id = UUID()
@@ -85,6 +95,11 @@ final class Holding {
         self.previousClose = previousClose ?? currentPrice
         self.currencyCode = currencyCode
         self.fxRateToPortfolioCurrency = 1
+        self.annualDividendPerShare = annualDividendPerShare
+        self.dividendYieldPercent = dividendYieldPercent
+        self.lastDividendPerShare = lastDividendPerShare
+        self.lastDividendDate = lastDividendDate
+        self.dividendPaymentsLastTwelveMonths = dividendPaymentsLastTwelveMonths
         self.lastUpdated = nil
         self.portfolio = portfolio
     }
@@ -94,6 +109,9 @@ final class Holding {
     var marketValueInPortfolioCurrency: Double { marketValue * fxRateToPortfolioCurrency }
     var costBasisInPortfolioCurrency: Double { costBasis * fxRateToPortfolioCurrency }
     var unrealizedGain: Double { marketValueInPortfolioCurrency - costBasisInPortfolioCurrency }
+    var estimatedAnnualDividendIncome: Double {
+        annualDividendPerShare * quantity * fxRateToPortfolioCurrency
+    }
 
     var unrealizedGainPercent: Double {
         guard costBasisInPortfolioCurrency > 0 else { return 0 }
@@ -204,6 +222,11 @@ final class WatchlistItem {
     var currentPrice: Double
     var previousClose: Double
     var currencyCode: String
+    var annualDividendPerShare: Double = 0
+    var dividendYieldPercent: Double = 0
+    var lastDividendPerShare: Double = 0
+    var lastDividendDate: Date?
+    var dividendPaymentsLastTwelveMonths: Int = 0
     var addedAt: Date
     var lastUpdated: Date?
     var watchlist: Watchlist?
@@ -214,6 +237,11 @@ final class WatchlistItem {
         currentPrice: Double = 0,
         previousClose: Double = 0,
         currencyCode: String = "USD",
+        annualDividendPerShare: Double = 0,
+        dividendYieldPercent: Double = 0,
+        lastDividendPerShare: Double = 0,
+        lastDividendDate: Date? = nil,
+        dividendPaymentsLastTwelveMonths: Int = 0,
         watchlist: Watchlist? = nil
     ) {
         self.id = UUID()
@@ -222,6 +250,11 @@ final class WatchlistItem {
         self.currentPrice = currentPrice
         self.previousClose = previousClose
         self.currencyCode = currencyCode
+        self.annualDividendPerShare = annualDividendPerShare
+        self.dividendYieldPercent = dividendYieldPercent
+        self.lastDividendPerShare = lastDividendPerShare
+        self.lastDividendDate = lastDividendDate
+        self.dividendPaymentsLastTwelveMonths = dividendPaymentsLastTwelveMonths
         self.addedAt = .now
         self.lastUpdated = nil
         self.watchlist = watchlist
@@ -242,6 +275,11 @@ struct MarketQuote: Sendable {
     let previousClose: Double
     let currencyCode: String
     let timestamp: Date
+    let annualDividendPerShare: Double
+    let dividendYieldPercent: Double
+    let lastDividendPerShare: Double
+    let lastDividendDate: Date?
+    let dividendPaymentsLastTwelveMonths: Int
 
     var changePercent: Double {
         guard previousClose > 0 else { return 0 }

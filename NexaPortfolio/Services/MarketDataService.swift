@@ -39,9 +39,10 @@ actor MarketDataClient {
         else { throw MarketDataError.invalidURL }
 
         components.queryItems = [
-            URLQueryItem(name: "range", value: "5d"),
+            URLQueryItem(name: "range", value: "1y"),
             URLQueryItem(name: "interval", value: "1d"),
-            URLQueryItem(name: "includePrePost", value: "false")
+            URLQueryItem(name: "includePrePost", value: "false"),
+            URLQueryItem(name: "events", value: "dividends")
         ]
         guard let url = components.url else { throw MarketDataError.invalidURL }
 
@@ -70,6 +71,21 @@ actor MarketDataClient {
             ?? result.meta.previousClose
             ?? closes.dropLast().last
             ?? price
+        let timestamp = result.meta.regularMarketTime
+            .map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            ?? .now
+        let cutoffDate = Calendar(identifier: .gregorian).date(
+            byAdding: .day,
+            value: -366,
+            to: timestamp
+        ) ?? timestamp.addingTimeInterval(-31_622_400)
+        let allDividendEvents = result.events?.dividends.map { Array($0.values) } ?? []
+        let dividendEvents = allDividendEvents
+            .filter { Date(timeIntervalSince1970: TimeInterval($0.date)) >= cutoffDate }
+            .sorted { $0.date < $1.date }
+        let annualDividend = dividendEvents.reduce(0) { $0 + $1.amount }
+        let lastDividend = dividendEvents.last
+        let dividendYieldPercent = price > 0 ? annualDividend / price * 100 : 0
 
         return MarketQuote(
             symbol: result.meta.symbol ?? symbol,
@@ -77,7 +93,12 @@ actor MarketDataClient {
             price: price,
             previousClose: previousClose,
             currencyCode: result.meta.currency ?? "USD",
-            timestamp: result.meta.regularMarketTime.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? .now
+            timestamp: timestamp,
+            annualDividendPerShare: annualDividend,
+            dividendYieldPercent: dividendYieldPercent,
+            lastDividendPerShare: lastDividend?.amount ?? 0,
+            lastDividendDate: lastDividend.map { Date(timeIntervalSince1970: TimeInterval($0.date)) },
+            dividendPaymentsLastTwelveMonths: dividendEvents.count
         )
     }
 
@@ -163,6 +184,11 @@ final class MarketDataStore: ObservableObject {
             holding.currentPrice = quote.price
             holding.previousClose = quote.previousClose
             holding.currencyCode = quote.currencyCode
+            holding.annualDividendPerShare = quote.annualDividendPerShare
+            holding.dividendYieldPercent = quote.dividendYieldPercent
+            holding.lastDividendPerShare = quote.lastDividendPerShare
+            holding.lastDividendDate = quote.lastDividendDate
+            holding.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
             holding.lastUpdated = quote.timestamp
             if holding.displayName == holding.symbol { holding.displayName = quote.displayName }
 
@@ -183,6 +209,11 @@ final class MarketDataStore: ObservableObject {
             item.currentPrice = quote.price
             item.previousClose = quote.previousClose
             item.currencyCode = quote.currencyCode
+            item.annualDividendPerShare = quote.annualDividendPerShare
+            item.dividendYieldPercent = quote.dividendYieldPercent
+            item.lastDividendPerShare = quote.lastDividendPerShare
+            item.lastDividendDate = quote.lastDividendDate
+            item.dividendPaymentsLastTwelveMonths = quote.dividendPaymentsLastTwelveMonths
             item.lastUpdated = quote.timestamp
             if item.displayName == item.symbol { item.displayName = quote.displayName }
         }
@@ -218,6 +249,7 @@ private struct YahooChartResponse: Decodable {
     struct Result: Decodable {
         let meta: Meta
         let indicators: Indicators
+        let events: Events?
     }
 
     struct Meta: Decodable {
@@ -237,6 +269,15 @@ private struct YahooChartResponse: Decodable {
 
     struct Quote: Decodable {
         let close: [Double?]
+    }
+
+    struct Events: Decodable {
+        let dividends: [String: DividendEvent]?
+    }
+
+    struct DividendEvent: Decodable {
+        let amount: Double
+        let date: Int
     }
 
     struct YahooError: Decodable {

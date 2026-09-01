@@ -173,29 +173,52 @@ struct WatchlistsView: View {
 
     private func itemRow(_ item: WatchlistItem) -> some View {
         HStack(spacing: 12) {
-            SymbolBadge(symbol: item.symbol)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.symbol)
-                    .font(.subheadline.weight(.bold))
-                Text(item.displayName)
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .lineLimit(1)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                Text(item.currentPrice > 0 ? item.currentPrice.currency(item.currencyCode) : "—")
-                    .font(.subheadline.weight(.semibold))
-                if item.previousClose > 0 {
-                    Text(item.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(item.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
-                } else {
-                    Text("Cours indisponible")
-                        .font(.caption2)
-                        .foregroundStyle(AppTheme.secondaryText)
+            NavigationLink {
+                SecurityDetailView(
+                    symbol: item.symbol,
+                    displayName: item.displayName,
+                    currentPrice: item.currentPrice,
+                    previousClose: item.previousClose,
+                    currencyCode: item.currencyCode,
+                    annualDividendPerShare: item.annualDividendPerShare,
+                    dividendYieldPercent: item.dividendYieldPercent,
+                    lastDividendPerShare: item.lastDividendPerShare,
+                    lastDividendDate: item.lastDividendDate,
+                    dividendPaymentsLastTwelveMonths: item.dividendPaymentsLastTwelveMonths
+                )
+            } label: {
+                HStack(spacing: 12) {
+                    SymbolBadge(symbol: item.symbol)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(item.symbol)
+                            .font(.subheadline.weight(.bold))
+                        Text(item.displayName)
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .lineLimit(1)
+                        DividendBadge(yieldPercent: item.dividendYieldPercent)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(item.currentPrice > 0 ? item.currentPrice.currency(item.currencyCode) : "—")
+                            .font(.subheadline.weight(.semibold))
+                        if item.previousClose > 0 {
+                            Text(item.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(item.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                        } else {
+                            Text("Cours indisponible")
+                                .font(.caption2)
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
                 }
             }
+            .buttonStyle(.plain)
+
             Menu {
                 Button("Supprimer", systemImage: "trash", role: .destructive) {
                     modelContext.delete(item)
@@ -235,6 +258,7 @@ private struct AddWatchlistItemSheet: View {
     @State private var showingSearch = false
     @State private var isLoadingQuote = false
     @State private var errorMessage: String?
+    @State private var latestQuote: MarketQuote?
 
     private var canSave: Bool {
         !symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -300,6 +324,7 @@ private struct AddWatchlistItemSheet: View {
         Task {
             do {
                 let quote = try await marketData.quote(for: symbol)
+                latestQuote = quote
                 currentPrice = quote.price.formatted(.number.precision(.fractionLength(2...6)))
                 currencyCode = quote.currencyCode
                 if displayName.isEmpty { displayName = quote.displayName }
@@ -322,10 +347,16 @@ private struct AddWatchlistItemSheet: View {
             symbol: normalized,
             displayName: displayName.isEmpty ? normalized : displayName,
             currentPrice: price,
-            previousClose: price,
+            previousClose: latestQuote?.previousClose ?? price,
             currencyCode: currencyCode,
+            annualDividendPerShare: latestQuote?.annualDividendPerShare ?? 0,
+            dividendYieldPercent: latestQuote?.dividendYieldPercent ?? 0,
+            lastDividendPerShare: latestQuote?.lastDividendPerShare ?? 0,
+            lastDividendDate: latestQuote?.lastDividendDate,
+            dividendPaymentsLastTwelveMonths: latestQuote?.dividendPaymentsLastTwelveMonths ?? 0,
             watchlist: watchlist
         )
+        item.lastUpdated = latestQuote?.timestamp
         modelContext.insert(item)
         do {
             try modelContext.save()

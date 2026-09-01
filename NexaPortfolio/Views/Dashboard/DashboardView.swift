@@ -4,6 +4,7 @@ import Charts
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var marketData: MarketDataStore
 
     @Query(sort: \Portfolio.createdAt) private var portfolios: [Portfolio]
@@ -32,6 +33,26 @@ struct DashboardView: View {
         return dailyGain / previousValue * 100
     }
 
+    private var estimatedAnnualDividendIncome: Double {
+        holdings.reduce(0) { $0 + $1.estimatedAnnualDividendIncome }
+    }
+
+    private var portfolioDividendYieldPercent: Double {
+        let holdingsValue = holdings.reduce(0) { $0 + $1.marketValueInPortfolioCurrency }
+        guard holdingsValue > 0 else { return 0 }
+        return estimatedAnnualDividendIncome / holdingsValue * 100
+    }
+
+    private var marketDataIsStale: Bool {
+        let cutoff = Date.now.addingTimeInterval(-15 * 60)
+        let dates = holdings.map(\.lastUpdated) + watchlistItems.map(\.lastUpdated)
+        guard !dates.isEmpty else { return false }
+        return dates.contains { date in
+            guard let date else { return true }
+            return date < cutoff
+        }
+    }
+
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -49,6 +70,7 @@ struct DashboardView: View {
                         .appCard()
                     } else {
                         allocationCard
+                        dividendIncomeCard
                         topMoversCard
                     }
 
@@ -61,9 +83,13 @@ struct DashboardView: View {
         }
         .navigationTitle("Nexa Portfolio")
         .task {
-            if refreshOnLaunch, holdings.contains(where: { $0.lastUpdated == nil }) {
+            if refreshOnLaunch, marketDataIsStale {
                 await refreshQuotes()
             }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active, refreshOnLaunch, marketDataIsStale else { return }
+            Task { await refreshQuotes() }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -206,6 +232,11 @@ struct DashboardView: View {
                             .font(.caption)
                             .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
+                        if holding.dividendYieldPercent > 0 {
+                            Text("Div. \(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2)))")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
@@ -214,6 +245,56 @@ struct DashboardView: View {
                         Text(holding.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(holding.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private var dividendIncomeCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Revenus de dividendes", systemImage: "banknote.fill")
+                    .font(.headline)
+                Spacer()
+                DividendBadge(yieldPercent: portfolioDividendYieldPercent)
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Estimation annuelle")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                    Text(estimatedAnnualDividendIncome.currency(primaryCurrency))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.positive)
+                }
+                Spacer()
+                Text("12 derniers mois")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            let dividendHoldings = holdings
+                .filter { $0.dividendYieldPercent > 0 }
+                .sorted { $0.estimatedAnnualDividendIncome > $1.estimatedAnnualDividendIncome }
+
+            if dividendHoldings.isEmpty {
+                Text("Aucun dividende détecté dans tes positions.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+            } else {
+                ForEach(dividendHoldings.prefix(3)) { holding in
+                    HStack {
+                        Text(holding.symbol)
+                            .font(.subheadline.weight(.bold))
+                        Text(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2)))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AppTheme.accent)
+                        Spacer()
+                        Text(holding.estimatedAnnualDividendIncome.currency(holding.portfolio?.currencyCode ?? primaryCurrency))
+                            .font(.subheadline.monospacedDigit())
                     }
                 }
             }
