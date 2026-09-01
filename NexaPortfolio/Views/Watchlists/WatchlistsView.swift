@@ -7,6 +7,9 @@ struct WatchlistsView: View {
 
     @Query(sort: \Watchlist.createdAt) private var watchlists: [Watchlist]
     @Query(sort: \Holding.symbol) private var holdings: [Holding]
+    @Query(sort: \Portfolio.createdAt) private var portfolios: [Portfolio]
+
+    @AppStorage("aggregateCurrencyCode") private var aggregateCurrencyCode = "EUR"
 
     @State private var selectedWatchlistID: UUID?
     @State private var showingAddItem = false
@@ -54,6 +57,8 @@ struct WatchlistsView: View {
                     await marketData.refresh(
                         holdings: holdings,
                         watchlistItems: watchlist.items,
+                        portfolios: portfolios,
+                        aggregateCurrencyCode: aggregateCurrencyCode,
                         context: modelContext
                     )
                 }

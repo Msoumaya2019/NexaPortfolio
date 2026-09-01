@@ -14,31 +14,49 @@ struct DashboardView: View {
 
     @AppStorage("hideBalances") private var hideBalances = false
     @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
+    @AppStorage("aggregateCurrencyCode") private var aggregateCurrencyCode = "EUR"
 
-    private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
-    private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
-    private var totalCost: Double { portfolios.reduce(0) { $0 + $1.costBasis } }
-    private var totalGain: Double { totalValue - portfolios.reduce(0) { $0 + $1.cashBalance } - totalCost }
+    private var primaryCurrency: String { aggregateCurrencyCode }
+    private var totalValue: Double {
+        portfolios.reduce(0) { $0 + $1.totalValue * aggregateRate(for: $1) }
+    }
+    private var totalCost: Double {
+        portfolios.reduce(0) { $0 + $1.costBasis * aggregateRate(for: $1) }
+    }
+    private var aggregateCashBalance: Double {
+        portfolios.reduce(0) { $0 + $1.cashBalance * aggregateRate(for: $1) }
+    }
+    private var totalGain: Double { totalValue - aggregateCashBalance - totalCost }
     private var dailyGain: Double {
         holdings.reduce(0) {
-            $0 + ($1.currentPrice - $1.previousClose) * $1.quantity * $1.fxRateToPortfolioCurrency
+            $0 + ($1.currentPrice - $1.previousClose)
+                * $1.quantity
+                * $1.fxRateToPortfolioCurrency
+                * aggregateRate(for: $1.portfolio)
         }
     }
 
     private var dailyGainPercent: Double {
         let previousValue = holdings.reduce(0) {
-            $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
+            $0 + $1.previousClose
+                * $1.quantity
+                * $1.fxRateToPortfolioCurrency
+                * aggregateRate(for: $1.portfolio)
         }
         guard previousValue > 0 else { return 0 }
         return dailyGain / previousValue * 100
     }
 
     private var estimatedAnnualDividendIncome: Double {
-        holdings.reduce(0) { $0 + $1.estimatedAnnualDividendIncome }
+        holdings.reduce(0) {
+            $0 + $1.estimatedAnnualDividendIncome * aggregateRate(for: $1.portfolio)
+        }
     }
 
     private var portfolioDividendYieldPercent: Double {
-        let holdingsValue = holdings.reduce(0) { $0 + $1.marketValueInPortfolioCurrency }
+        let holdingsValue = holdings.reduce(0) {
+            $0 + $1.marketValueInPortfolioCurrency * aggregateRate(for: $1.portfolio)
+        }
         guard holdingsValue > 0 else { return 0 }
         return estimatedAnnualDividendIncome / holdingsValue * 100
     }
@@ -46,11 +64,18 @@ struct DashboardView: View {
     private var marketDataIsStale: Bool {
         let cutoff = Date.now.addingTimeInterval(-15 * 60)
         let dates = holdings.map(\.lastUpdated) + watchlistItems.map(\.lastUpdated)
-        guard !dates.isEmpty else { return false }
-        return dates.contains { date in
+        let quoteDataIsStale = dates.contains { date in
             guard let date else { return true }
             return date < cutoff
         }
+        let fxDataIsStale = portfolios.contains { portfolio in
+            guard portfolio.currencyCode != aggregateCurrencyCode else { return false }
+            guard portfolio.aggregateFXTargetCurrency == aggregateCurrencyCode,
+                  let updated = portfolio.aggregateFXLastUpdated
+            else { return true }
+            return updated < cutoff
+        }
+        return quoteDataIsStale || fxDataIsStale
     }
 
     var body: some View {
@@ -82,7 +107,7 @@ struct DashboardView: View {
             .refreshable { await refreshQuotes() }
         }
         .navigationTitle("Nexa Portfolio")
-        .task {
+        .task(id: aggregateCurrencyCode) {
             if refreshOnLaunch, marketDataIsStale {
                 await refreshQuotes()
             }
@@ -187,7 +212,10 @@ struct DashboardView: View {
             HStack(spacing: 20) {
                 Chart(holdings.prefix(8)) { holding in
                     SectorMark(
-                        angle: .value("Valeur", holding.marketValueInPortfolioCurrency),
+                        angle: .value(
+                            "Valeur",
+                            holding.marketValueInPortfolioCurrency * aggregateRate(for: holding.portfolio)
+                        ),
                         innerRadius: .ratio(0.68),
                         angularInset: 2
                     )
@@ -206,7 +234,12 @@ struct DashboardView: View {
                             Text(holding.symbol)
                                 .font(.caption.weight(.semibold))
                             Spacer()
-                            Text(totalValue > 0 ? holding.marketValueInPortfolioCurrency / totalValue : 0, format: .percent.precision(.fractionLength(1)))
+                            Text(
+                                totalValue > 0
+                                    ? holding.marketValueInPortfolioCurrency * aggregateRate(for: holding.portfolio) / totalValue
+                                    : 0,
+                                format: .percent.precision(.fractionLength(1))
+                            )
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(AppTheme.secondaryText)
                         }
@@ -293,7 +326,10 @@ struct DashboardView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(AppTheme.accent)
                         Spacer()
-                        Text(holding.estimatedAnnualDividendIncome.currency(holding.portfolio?.currencyCode ?? primaryCurrency))
+                        Text(
+                            (holding.estimatedAnnualDividendIncome * aggregateRate(for: holding.portfolio))
+                                .currency(primaryCurrency)
+                        )
                             .font(.subheadline.monospacedDigit())
                     }
                 }
@@ -338,6 +374,19 @@ struct DashboardView: View {
     }
 
     private func refreshQuotes() async {
-        await marketData.refresh(holdings: holdings, watchlistItems: watchlistItems, context: modelContext)
+        await marketData.refresh(
+            holdings: holdings,
+            watchlistItems: watchlistItems,
+            portfolios: portfolios,
+            aggregateCurrencyCode: aggregateCurrencyCode,
+            context: modelContext
+        )
+    }
+
+    private func aggregateRate(for portfolio: Portfolio?) -> Double {
+        guard let portfolio else { return 1 }
+        if portfolio.currencyCode == aggregateCurrencyCode { return 1 }
+        guard portfolio.aggregateFXTargetCurrency == aggregateCurrencyCode else { return 1 }
+        return portfolio.aggregateFXRate
     }
 }

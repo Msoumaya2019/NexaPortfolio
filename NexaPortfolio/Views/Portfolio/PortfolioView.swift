@@ -3,29 +3,48 @@ import SwiftData
 
 struct PortfolioView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var marketData: MarketDataStore
     @Query(sort: \Portfolio.createdAt) private var portfolios: [Portfolio]
+    @Query(sort: \Holding.symbol) private var allHoldings: [Holding]
+    @Query(sort: \WatchlistItem.addedAt) private var watchlistItems: [WatchlistItem]
+
+    @AppStorage("aggregateCurrencyCode") private var aggregateCurrencyCode = "EUR"
 
     @State private var selectedPortfolioID: UUID?
+    @State private var tradePortfolioID: UUID?
     @State private var showingAddTrade = false
     @State private var showingNewPortfolio = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
 
     private var selectedPortfolio: Portfolio? {
-        portfolios.first { $0.id == selectedPortfolioID } ?? portfolios.first
+        guard let selectedPortfolioID else { return nil }
+        return portfolios.first { $0.id == selectedPortfolioID }
+    }
+
+    private var tradePortfolio: Portfolio? {
+        guard let tradePortfolioID else { return nil }
+        return portfolios.first { $0.id == tradePortfolioID }
     }
 
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
 
-            if let portfolio = selectedPortfolio {
+            if !portfolios.isEmpty {
                 ScrollView {
                     LazyVStack(spacing: 18) {
-                        portfolioSelector(portfolio)
-                        summaryCard(portfolio)
-                        holdingsCard(portfolio)
-                        transactionsCard(portfolio)
+                        portfolioSelector(selectedPortfolio)
+                        if let portfolio = selectedPortfolio {
+                            summaryCard(portfolio)
+                            holdingsCard(portfolio)
+                            transactionsCard(portfolio)
+                        } else {
+                            AggregatePortfolioContent(
+                                portfolios: portfolios,
+                                aggregateCurrencyCode: $aggregateCurrencyCode
+                            )
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 30)
@@ -53,30 +72,49 @@ struct PortfolioView: View {
                     } label: {
                         Label("Supprimer ce portefeuille", systemImage: "trash")
                     }
-                    .disabled(portfolios.count <= 1)
+                    .disabled(selectedPortfolio == nil || portfolios.count <= 1)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
             }
 
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddTrade = true
-                } label: {
-                    Image(systemName: "plus")
+                if let portfolio = selectedPortfolio {
+                    Button {
+                        tradePortfolioID = portfolio.id
+                        showingAddTrade = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Ajouter une transaction")
+                } else {
+                    Menu {
+                        ForEach(portfolios) { portfolio in
+                            Button {
+                                tradePortfolioID = portfolio.id
+                                showingAddTrade = true
+                            } label: {
+                                Label(portfolio.name, systemImage: "briefcase")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Choisir un portefeuille pour la transaction")
                 }
-                .disabled(selectedPortfolio == nil)
-                .accessibilityLabel("Ajouter une transaction")
             }
         }
-        .task {
-            if selectedPortfolioID == nil { selectedPortfolioID = portfolios.first?.id }
+        .task(id: aggregateCurrencyCode) {
+            await refreshAllMarketData()
         }
         .onChange(of: portfolios.count) {
-            if selectedPortfolio == nil { selectedPortfolioID = portfolios.first?.id }
+            if selectedPortfolioID != nil, selectedPortfolio == nil {
+                selectedPortfolioID = nil
+            }
+            Task { await refreshAllMarketData() }
         }
         .sheet(isPresented: $showingAddTrade) {
-            if let portfolio = selectedPortfolio {
+            if let portfolio = tradePortfolio {
                 AddTradeSheet(portfolio: portfolio)
             }
         }
@@ -98,31 +136,49 @@ struct PortfolioView: View {
             Text("Cette action supprime aussi ses positions et transactions.")
         }
         .alert("Erreur", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
+            get: { errorMessage != nil || marketData.errorMessage != nil },
+            set: {
+                if !$0 {
+                    errorMessage = nil
+                    marketData.errorMessage = nil
+                }
+            }
         )) {
-            Button("OK", role: .cancel) { errorMessage = nil }
+            Button("OK", role: .cancel) {
+                errorMessage = nil
+                marketData.errorMessage = nil
+            }
         } message: {
-            Text(errorMessage ?? "")
+            Text(errorMessage ?? marketData.errorMessage ?? "")
         }
     }
 
-    private func portfolioSelector(_ portfolio: Portfolio) -> some View {
+    private func portfolioSelector(_ portfolio: Portfolio?) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Portefeuille actif")
+                Text(portfolio == nil ? "Vue consolidée" : "Portefeuille actif")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
-                Text(portfolio.name)
+                Text(portfolio?.name ?? "Tous les portefeuilles")
                     .font(.title3.weight(.bold))
             }
             Spacer()
             Menu {
+                Button {
+                    selectedPortfolioID = nil
+                } label: {
+                    if portfolio == nil {
+                        Label("Tous les portefeuilles", systemImage: "checkmark")
+                    } else {
+                        Label("Tous les portefeuilles", systemImage: "square.stack.3d.up.fill")
+                    }
+                }
+                Divider()
                 ForEach(portfolios) { item in
                     Button {
                         selectedPortfolioID = item.id
                     } label: {
-                        if item.id == portfolio.id {
+                        if item.id == portfolio?.id {
                             Label(item.name, systemImage: "checkmark")
                         } else {
                             Text(item.name)
@@ -318,10 +374,20 @@ struct PortfolioView: View {
         modelContext.delete(portfolio)
         do {
             try modelContext.save()
-            selectedPortfolioID = portfolios.first { $0.id != portfolio.id }?.id
+            selectedPortfolioID = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshAllMarketData() async {
+        await marketData.refresh(
+            holdings: allHoldings,
+            watchlistItems: watchlistItems,
+            portfolios: portfolios,
+            aggregateCurrencyCode: aggregateCurrencyCode,
+            context: modelContext
+        )
     }
 }
 

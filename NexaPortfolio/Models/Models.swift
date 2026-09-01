@@ -7,6 +7,9 @@ final class Portfolio {
     var name: String
     var currencyCode: String
     var cashBalance: Double
+    var aggregateFXRate: Double = 1
+    var aggregateFXTargetCurrency: String = "EUR"
+    var aggregateFXLastUpdated: Date?
     var createdAt: Date
 
     @Relationship(deleteRule: .cascade, inverse: \Holding.portfolio)
@@ -25,6 +28,9 @@ final class Portfolio {
         self.name = name
         self.currencyCode = currencyCode
         self.cashBalance = cashBalance
+        self.aggregateFXRate = 1
+        self.aggregateFXTargetCurrency = "EUR"
+        self.aggregateFXLastUpdated = currencyCode == "EUR" ? .now : nil
         self.createdAt = createdAt
         self.holdings = []
         self.transactions = []
