@@ -28,6 +28,17 @@ struct SecurityDetailView: View {
         return annualDividendPerShare * quantity * fxRateToPortfolioCurrency
     }
 
+    private var estimatedNextDividendPerShare: Double {
+        if lastDividendPerShare > 0 { return lastDividendPerShare }
+        guard dividendPaymentsLastTwelveMonths > 0 else { return 0 }
+        return annualDividendPerShare / Double(dividendPaymentsLastTwelveMonths)
+    }
+
+    private var estimatedNextDividendIncome: Double? {
+        guard let quantity, quantity > 0, estimatedNextDividendPerShare > 0 else { return nil }
+        return estimatedNextDividendPerShare * quantity * fxRateToPortfolioCurrency
+    }
+
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -78,9 +89,26 @@ struct SecurityDetailView: View {
                         .font(.title3.weight(.bold))
                 }
 
+                if let estimatedNextDividendIncome, let quantity {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Montant estimé pour ta position")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Text(estimatedNextDividendIncome.currency(portfolioCurrencyCode ?? currencyCode))
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(AppTheme.positive)
+                        Text("≈ \(quantity.formatted(.number.precision(.fractionLength(0...4)))) actions × \(estimatedNextDividendPerShare.currency(currencyCode))")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(AppTheme.positive.opacity(0.09), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+
                 Text(nextDividendDateIsEstimated
-                     ? "Cette date est calculée d’après la cadence récente des dividendes et peut changer après l’annonce de l’entreprise."
-                     : "Cette date provient des données publiées pour le titre et peut encore être modifiée par l’entreprise.")
+                     ? "La date et le montant sont estimés d’après les versements récents et peuvent changer après l’annonce de l’entreprise."
+                     : "Cette date provient des données publiées pour le titre. Le montant reste estimé à partir du dernier versement et peut changer.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             } else {
