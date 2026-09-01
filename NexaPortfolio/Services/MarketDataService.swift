@@ -162,59 +162,22 @@ final class MarketDataStore: ObservableObject {
 
     private let client = MarketDataClient.shared
 
-    func refresh(
-        holdings: [Holding],
-        watchlistItems: [WatchlistItem],
-        portfolios: [Portfolio],
-        aggregateCurrencyCode: String,
-        context: ModelContext
-    ) async {
-        guard !isRefreshing else { return }
+    func refresh(holdings: [Holding], watchlistItems: [WatchlistItem], context: ModelContext) async {
         let symbols = holdings.map(\.symbol) + watchlistItems.map(\.symbol)
-        let portfolioFXSymbols = Set(portfolios.compactMap { portfolio -> String? in
-            guard portfolio.currencyCode != aggregateCurrencyCode else { return nil }
-            return "\(portfolio.currencyCode)\(aggregateCurrencyCode)=X"
-        })
-        guard !symbols.isEmpty || !portfolioFXSymbols.isEmpty else { return }
+        guard !symbols.isEmpty else { return }
 
         isRefreshing = true
         errorMessage = nil
-        let quotes: [String: MarketQuote]
-        if symbols.isEmpty {
-            quotes = [:]
-        } else {
-            quotes = await client.quotes(for: symbols)
-        }
+        let quotes = await client.quotes(for: symbols)
 
-        let holdingFXSymbols = Set(holdings.compactMap { holding -> String? in
+        let fxSymbols = Set(holdings.compactMap { holding -> String? in
             guard let quote = quotes[holding.symbol.uppercased()],
                   let targetCurrency = holding.portfolio?.currencyCode,
                   quote.currencyCode != targetCurrency
             else { return nil }
             return "\(quote.currencyCode)\(targetCurrency)=X"
         })
-        let fxSymbols = holdingFXSymbols.union(portfolioFXSymbols)
-        let fxQuotes: [String: MarketQuote]
-        if fxSymbols.isEmpty {
-            fxQuotes = [:]
-        } else {
-            fxQuotes = await client.quotes(for: Array(fxSymbols))
-        }
-
-        for portfolio in portfolios {
-            if portfolio.currencyCode == aggregateCurrencyCode {
-                portfolio.aggregateFXRate = 1
-                portfolio.aggregateFXTargetCurrency = aggregateCurrencyCode
-                portfolio.aggregateFXLastUpdated = .now
-            } else {
-                let fxSymbol = "\(portfolio.currencyCode)\(aggregateCurrencyCode)=X"
-                if let quote = fxQuotes[fxSymbol] {
-                    portfolio.aggregateFXRate = quote.price
-                    portfolio.aggregateFXTargetCurrency = aggregateCurrencyCode
-                    portfolio.aggregateFXLastUpdated = quote.timestamp
-                }
-            }
-        }
+        let fxQuotes = await client.quotes(for: Array(fxSymbols))
 
         for holding in holdings {
             guard let quote = quotes[holding.symbol.uppercased()] else { continue }
@@ -260,7 +223,7 @@ final class MarketDataStore: ObservableObject {
         } catch {
             errorMessage = "Les cours ont été reçus mais n’ont pas pu être enregistrés."
         }
-        if !symbols.isEmpty, quotes.isEmpty {
+        if quotes.isEmpty {
             errorMessage = "Aucun cours n’a pu être actualisé. Vérifie la connexion et les symboles."
         }
         isRefreshing = false

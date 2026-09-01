@@ -9,9 +9,6 @@ struct SettingsView: View {
 
     @AppStorage("hideBalances") private var hideBalances = false
     @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
-    @AppStorage("aggregateCurrencyCode") private var aggregateCurrencyCode = "EUR"
-
-    private let currencies = ["EUR", "USD", "GBP", "CHF", "CAD", "JPY"]
 
     var body: some View {
         ZStack {
@@ -24,11 +21,6 @@ struct SettingsView: View {
                     }
                     Toggle(isOn: $refreshOnLaunch) {
                         Label("Actualiser au démarrage", systemImage: "arrow.clockwise")
-                    }
-                    Picker(selection: $aggregateCurrencyCode) {
-                        ForEach(currencies, id: \.self) { Text($0).tag($0) }
-                    } label: {
-                        Label("Devise globale", systemImage: "eurosign.arrow.circlepath")
                     }
                 }
 
@@ -51,7 +43,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.2.0")
+                    LabeledContent("Version", value: "1.1.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
