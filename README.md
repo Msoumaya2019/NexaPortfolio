@@ -21,7 +21,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - iOS 17 ou ultérieur ;
 - un compte Apple gratuit pour installer sur son propre appareil, ou un abonnement Apple Developer pour une distribution plus durable.
 
-Le bundle identifier fourni est `com.yourname.NexaPortfolio`. Remplace-le par un identifiant qui t’appartient avant de signer.
+Le bundle identifier fourni est `com.msoumaya2019.nexaportfolio`. Tu peux le conserver si tu l’enregistres dans ton compte Apple Developer, ou le remplacer par un identifiant qui t’appartient avant de signer.
 
 ## Compiler et signer directement avec Xcode
 
@@ -43,6 +43,8 @@ scripts/build-unsigned-ipa.sh
 ```
 
 Le résultat sera créé dans `build/NexaPortfolio-unsigned.ipa`. Cet IPA est compilé, mais ne peut pas être installé avant d’avoir reçu une signature et un profil de provisioning valides.
+
+Pour re-signer cet IPA sur Mac avec ton certificat et ton profil, consulte `SIGNING.md` ou utilise `scripts/resign-ipa.sh`.
 
 ## Compiler dans GitHub Actions
 
