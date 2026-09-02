@@ -364,6 +364,8 @@ struct PortfolioView: View {
                                     Label("Trading 212", systemImage: "link")
                                 } else if transaction.externalSource == "degiro:csv" {
                                     Label("DEGIRO", systemImage: "doc.text")
+                                } else if transaction.externalSource == "traderepublic:pdf" {
+                                    Label("Trade Republic", systemImage: "doc.richtext")
                                 }
                             }
                             .font(.caption)

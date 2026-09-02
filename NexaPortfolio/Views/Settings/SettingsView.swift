@@ -55,6 +55,16 @@ struct SettingsView: View {
                     Text("Importe les achats, ventes et dividendes depuis les relevés CSV officiels, sans identifiant ni mot de passe.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
+
+                    NavigationLink {
+                        TradeRepublicSettingsView()
+                    } label: {
+                        Label("Trade Republic", systemImage: "doc.richtext")
+                    }
+
+                    Text("Importe localement les confirmations d’exécution et relevés de dividendes PDF, sans PIN ni code 2FA.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 Section("À propos des cours") {
@@ -65,7 +75,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.5.2")
+                    LabeledContent("Version", value: "1.6.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
