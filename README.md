@@ -21,6 +21,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - import sans doublons des achats, ventes et dividendes DEGIRO à partir des relevés CSV officiels, sans transmettre les identifiants du compte ;
 - import local de l’export de transactions CSV ou des confirmations et relevés PDF Trade Republic, avec détection des doublons et sans identifiants de connexion ;
 - import local de l’historique CSV d’investissements Revolut : achats, ventes, dividendes, corrections fiscales, splits et fusions ;
+- connexion non officielle BoursoBank en lecture seule avec validation forte, synchronisation des positions, quantités, PRU, cours et liquidités du PEA ou du compte-titres ;
+- conservation chiffrée de la session BoursoBank dans le Trousseau iOS pour une synchronisation silencieuse au lancement et au retour dans l’application ;
 - avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
 - avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;
@@ -70,7 +72,7 @@ Le workflow `.github/workflows/build-unsigned-ipa.yml` fait la même compilation
 
 ## Source des cours
 
-La version 1.6 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
+La version 2.0 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
 
 ## Connexion Trading 212
 
@@ -115,3 +117,13 @@ Revolut ne fournit pas d’API publique pour synchroniser automatiquement les ac
 Nexa importe les achats au marché ou à cours limité, les ventes au marché, stop ou à cours limité, les dividendes, les corrections fiscales de dividendes, les splits et les fusions en titres. Les dépôts, retraits, récompenses, frais de garde et mouvements internes sans titre sont ignorés. Chaque ligne reçoit une empreinte stable afin qu’un même export puisse être réimporté sans créer de doublons.
 
 Le fichier est traité localement sur l’iPhone et aucun numéro de téléphone, PIN, code 2FA ou jeton Revolut n’est demandé. Les ajustements de quantité à prix nul préservent le coût total de la position ; après une fusion entre deux symboles, vérifie néanmoins le prix d’achat moyen et utilise sa correction manuelle si nécessaire.
+
+## Connexion BoursoBank
+
+Dans **Réglages > BoursoBank**, saisis l’identifiant client et le mot de passe, puis valide la demande depuis l’application officielle BoursoBank si elle apparaît. Le mot de passe reste uniquement en mémoire pendant l’authentification et n’est jamais enregistré. L’identifiant, si l’option est activée, et les cookies de la session authentifiée sont conservés dans le Trousseau iOS avec une protection limitée à l’appareil déverrouillé.
+
+Choisis ensuite le PEA ou le compte-titres et crée de préférence un portefeuille BoursoBank séparé. La synchronisation récupère l’état courant : positions, quantités, prix de revient moyen, dernier cours et liquidités. Elle ne reconstruit pas l’historique complet des achats, ventes et dividendes passés. Les relevés BoursoBank restent nécessaires pour cet historique.
+
+Lorsque **Synchronisation silencieuse** est active, Nexa essaie d’actualiser le compte au lancement et à chaque retour au premier plan, avec un intervalle minimal de quinze minutes. Il ne s’agit pas d’une exécution serveur permanente : iOS ne garantit pas les tâches en arrière-plan et BoursoBank peut expirer la session ou demander une nouvelle validation forte.
+
+Cette intégration s’appuie sur des interfaces web privées, non documentées et susceptibles de changer. Elle ne contient aucun appel de passage d’ordre ou de virement. Les mécanismes d’authentification et de lecture ont été adaptés en Swift à partir du projet MIT `azerpas/bourso-api`; consulte `THIRD_PARTY_NOTICES.md` pour l’attribution complète.

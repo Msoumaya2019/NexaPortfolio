@@ -72,6 +72,8 @@ final class Holding {
     var nextDividendDateIsEstimated: Bool = true
     var dividendPaymentsLastTwelveMonths: Int = 0
     var lastUpdated: Date?
+    var externalSource: String? = nil
+    var brokerSymbol: String? = nil
     var portfolio: Portfolio?
 
     init(

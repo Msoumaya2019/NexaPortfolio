@@ -75,6 +75,16 @@ struct SettingsView: View {
                     Text("Importe localement l’historique CSV d’investissements Revolut, sans identifiant ni code de connexion.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
+
+                    NavigationLink {
+                        BoursoBankSettingsView()
+                    } label: {
+                        Label("BoursoBank", systemImage: "building.columns.circle.fill")
+                    }
+
+                    Text("Synchronise le PEA et les comptes-titres en lecture seule via une connexion non officielle avec validation dans l’application BoursoBank.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 Section("Analyse") {
@@ -97,7 +107,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.9.0")
+                    LabeledContent("Version", value: "2.0.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

@@ -16,7 +16,9 @@ struct DashboardView: View {
     @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
     @AppStorage("trading212.environment") private var trading212EnvironmentRawValue = Trading212Environment.demo.rawValue
     @AppStorage("trading212.autoSync") private var trading212AutoSync = true
+    @AppStorage("boursobank.autoSync") private var boursoBankAutoSync = true
     @State private var trading212SyncInProgress = false
+    @State private var boursoBankSyncInProgress = false
 
     private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
     private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
@@ -87,6 +89,7 @@ struct DashboardView: View {
         .navigationTitle("Nexa Portfolio")
         .task {
             await synchronizeTrading212IfNeeded()
+            await synchronizeBoursoBankIfNeeded()
             if refreshOnLaunch, marketDataIsStale {
                 await refreshQuotes()
             }
@@ -95,6 +98,7 @@ struct DashboardView: View {
             guard newPhase == .active else { return }
             Task {
                 await synchronizeTrading212IfNeeded()
+                await synchronizeBoursoBankIfNeeded()
                 if refreshOnLaunch, marketDataIsStale {
                     await refreshQuotes()
                 }
@@ -130,6 +134,47 @@ struct DashboardView: View {
             Button("OK", role: .cancel) { marketData.errorMessage = nil }
         } message: {
             Text(marketData.errorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func synchronizeBoursoBankIfNeeded() async {
+        guard boursoBankAutoSync, !boursoBankSyncInProgress,
+              let storedSession = try? BoursoBankSessionKeychain.load(),
+              let accountID = UserDefaults.standard.string(forKey: "boursobank.accountID"),
+              !accountID.isEmpty
+        else { return }
+
+        let defaults = UserDefaults.standard
+        let portfolioKey = "boursobank.portfolioID.\(accountID)"
+        let lastSyncKey = "boursobank.lastSyncTimestamp.\(accountID)"
+        let lastSyncTimestamp = defaults.double(forKey: lastSyncKey)
+        guard Date.now.timeIntervalSince1970 - lastSyncTimestamp >= 15 * 60,
+              let portfolioID = defaults.string(forKey: portfolioKey),
+              let portfolio = portfolios.first(where: { $0.id.uuidString == portfolioID })
+        else { return }
+        guard await BoursoBankSyncGate.shared.acquire() else { return }
+
+        boursoBankSyncInProgress = true
+        defer { boursoBankSyncInProgress = false }
+        do {
+            let client = BoursoBankClient(storedSession: storedSession)
+            let accounts = try await client.tradingAccounts()
+            guard let account = accounts.first(where: { $0.id == accountID }) else {
+                throw BoursoBankError.noTradingAccount
+            }
+            let snapshot = try await client.snapshot(for: account)
+            _ = try await BoursoBankImporter.synchronize(
+                snapshot: snapshot,
+                client: client,
+                into: portfolio,
+                context: modelContext
+            )
+            defaults.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
+            await BoursoBankSyncGate.shared.release()
+        } catch {
+            await BoursoBankSyncGate.shared.release()
+            // La connexion manuelle dans Réglages expliquera une session expirée ou un changement du site.
         }
     }
 
