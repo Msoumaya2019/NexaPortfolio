@@ -35,6 +35,18 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Connexions") {
+                    NavigationLink {
+                        Trading212SettingsView()
+                    } label: {
+                        Label("Trading 212", systemImage: "link.circle.fill")
+                    }
+
+                    Text("Importe automatiquement les achats, ventes, dividendes, positions et liquidités avec une clé API en lecture seule.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
                 Section("À propos des cours") {
                     Label("Actualisation manuelle et sans clé API", systemImage: "network")
                     Text("Les cours sont obtenus depuis un service public et peuvent être retardés ou indisponibles. Les valeurs sont indicatives.")
@@ -43,7 +55,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.3.0")
+                    LabeledContent("Version", value: "1.4.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
@@ -83,7 +95,7 @@ struct SettingsView: View {
             }
         }
 
-        lines.append(contentsOf: ["", "TRANSACTIONS", "Portefeuille;Type;Symbole;Quantité;Prix;Frais;Devise;Date;Notes"])
+        lines.append(contentsOf: ["", "TRANSACTIONS", "Portefeuille;Type;Symbole;Quantité;Prix;Frais;Devise;Date;Source;Identifiant externe;Notes"])
         for transaction in transactions {
             lines.append([
                 transaction.portfolio?.name ?? "",
@@ -94,6 +106,8 @@ struct SettingsView: View {
                 String(transaction.fees),
                 transaction.currencyCode,
                 transaction.date.ISO8601Format(),
+                transaction.externalSource ?? "Manuel",
+                transaction.externalIdentifier ?? "",
                 transaction.notes
             ].map(csvEscape).joined(separator: ";"))
         }

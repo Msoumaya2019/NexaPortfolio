@@ -22,6 +22,8 @@
 		10000000000000000000000D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 11000000000000000000000D /* Assets.xcassets */; };
 		10000000000000000000000E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 11000000000000000000000F /* PrivacyInfo.xcprivacy */; };
 		10000000000000000000000F /* SecurityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000010 /* SecurityDetailView.swift */; };
+		100000000000000000000010 /* Trading212Service.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000011 /* Trading212Service.swift */; };
+		100000000000000000000011 /* Trading212SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000012 /* Trading212SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +43,8 @@
 		11000000000000000000000E /* NexaPortfolio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NexaPortfolio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		11000000000000000000000F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		110000000000000000000010 /* SecurityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityDetailView.swift; sourceTree = "<group>"; };
+		110000000000000000000011 /* Trading212Service.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212Service.swift; sourceTree = "<group>"; };
+		110000000000000000000012 /* Trading212SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trading212SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +92,7 @@
 			children = (
 				110000000000000000000003 /* MarketDataService.swift */,
 				110000000000000000000004 /* PortfolioLedger.swift */,
+				110000000000000000000011 /* Trading212Service.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -152,6 +157,7 @@
 			isa = PBXGroup;
 			children = (
 				11000000000000000000000C /* SettingsView.swift */,
+				110000000000000000000012 /* Trading212SettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -240,6 +246,8 @@
 				10000000000000000000000B /* WatchlistsView.swift in Sources */,
 				10000000000000000000000C /* SettingsView.swift in Sources */,
 				10000000000000000000000F /* SecurityDetailView.swift in Sources */,
+				100000000000000000000010 /* Trading212Service.swift in Sources */,
+				100000000000000000000011 /* Trading212SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -365,7 +373,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -375,7 +383,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.msoumaya2019.nexaportfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -393,7 +401,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -403,7 +411,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.3.0;
+				MARKETING_VERSION = 1.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.msoumaya2019.nexaportfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

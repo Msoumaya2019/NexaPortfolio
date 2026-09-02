@@ -14,6 +14,9 @@ struct DashboardView: View {
 
     @AppStorage("hideBalances") private var hideBalances = false
     @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
+    @AppStorage("trading212.environment") private var trading212EnvironmentRawValue = Trading212Environment.demo.rawValue
+    @AppStorage("trading212.autoSync") private var trading212AutoSync = true
+    @State private var trading212SyncInProgress = false
 
     private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
     private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
@@ -83,13 +86,19 @@ struct DashboardView: View {
         }
         .navigationTitle("Nexa Portfolio")
         .task {
+            await synchronizeTrading212IfNeeded()
             if refreshOnLaunch, marketDataIsStale {
                 await refreshQuotes()
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active, refreshOnLaunch, marketDataIsStale else { return }
-            Task { await refreshQuotes() }
+            guard newPhase == .active else { return }
+            Task {
+                await synchronizeTrading212IfNeeded()
+                if refreshOnLaunch, marketDataIsStale {
+                    await refreshQuotes()
+                }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -121,6 +130,44 @@ struct DashboardView: View {
             Button("OK", role: .cancel) { marketData.errorMessage = nil }
         } message: {
             Text(marketData.errorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func synchronizeTrading212IfNeeded() async {
+        guard trading212AutoSync, !trading212SyncInProgress,
+              let environment = Trading212Environment(rawValue: trading212EnvironmentRawValue),
+              let credentials = try? Trading212Keychain.load(for: environment)
+        else { return }
+
+        let defaults = UserDefaults.standard
+        let portfolioKey = "trading212.portfolioID.\(environment.rawValue)"
+        let lastSyncKey = "trading212.lastSyncTimestamp.\(environment.rawValue)"
+        let lastSyncTimestamp = defaults.double(forKey: lastSyncKey)
+        guard Date.now.timeIntervalSince1970 - lastSyncTimestamp >= 15 * 60,
+              let portfolioID = defaults.string(forKey: portfolioKey),
+              let portfolio = portfolios.first(where: { $0.id.uuidString == portfolioID })
+        else { return }
+
+        trading212SyncInProgress = true
+        defer { trading212SyncInProgress = false }
+        do {
+            let lastSyncDate = lastSyncTimestamp > 0
+                ? Date(timeIntervalSince1970: lastSyncTimestamp)
+                : nil
+            let snapshot = try await Trading212Client(
+                environment: environment,
+                credentials: credentials
+            ).snapshot(since: lastSyncDate)
+            _ = try await Trading212Importer.synchronize(
+                snapshot: snapshot,
+                environment: environment,
+                into: portfolio,
+                context: modelContext
+            )
+            defaults.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
+        } catch {
+            // Une synchronisation manuelle dans Réglages affichera le détail de l’erreur.
         }
     }
 

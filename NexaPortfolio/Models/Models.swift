@@ -169,6 +169,9 @@ final class TradeTransaction {
     var currencyCode: String
     var date: Date
     var notes: String
+    var externalSource: String?
+    var externalIdentifier: String?
+    var brokerTicker: String?
     var portfolio: Portfolio?
 
     var kind: TransactionKind {
@@ -186,6 +189,9 @@ final class TradeTransaction {
         currencyCode: String = "EUR",
         date: Date = .now,
         notes: String = "",
+        externalSource: String? = nil,
+        externalIdentifier: String? = nil,
+        brokerTicker: String? = nil,
         portfolio: Portfolio? = nil
     ) {
         self.id = UUID()
@@ -198,6 +204,9 @@ final class TradeTransaction {
         self.currencyCode = currencyCode
         self.date = date
         self.notes = notes
+        self.externalSource = externalSource
+        self.externalIdentifier = externalIdentifier
+        self.brokerTicker = brokerTicker
         self.portfolio = portfolio
     }
 

@@ -16,6 +16,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - estimation du montant du prochain dividende selon le nombre d’actions détenues et la devise du portefeuille ;
 - synthèse des dividendes propre à chaque portefeuille ;
 - correction manuelle du prix moyen ou de la valeur totale d’achat de chaque position ;
+- connexion Trading 212 Démo ou Réel en lecture seule, avec clés conservées dans le trousseau iOS ;
+- synchronisation sans doublons des achats, ventes et dividendes Trading 212, puis rapprochement des positions et liquidités au lancement ou au retour dans l’app ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;
@@ -63,6 +65,12 @@ Le workflow `.github/workflows/build-unsigned-ipa.yml` fait la même compilation
 
 ## Source des cours
 
-La version 1.3 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
+La version 1.4 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
+
+## Connexion Trading 212
+
+Dans **Réglages > Trading 212**, choisis le compte Démo ou Réel, puis saisis la clé API et le secret générés dans Trading 212. Utilise uniquement des autorisations de lecture pour les informations du compte, le portefeuille et l’historique. Les identifiants sont enregistrés dans le trousseau iOS et ne sont jamais inclus dans le projet ou envoyés vers GitHub.
+
+Un portefeuille Trading 212 séparé est recommandé afin d’éviter qu’une ancienne saisie manuelle représente deux fois la même opération. La synchronisation importe les exécutions d’ordres et les dividendes avec leurs identifiants externes, puis utilise les positions ouvertes du courtier pour réconcilier les quantités et prix moyens. Lorsque l’option automatique est active, une vérification peut avoir lieu au lancement ou au retour dans l’application, avec un intervalle minimal de quinze minutes.
 
 Les données et calculs sont indicatifs et ne constituent pas un conseil financier.

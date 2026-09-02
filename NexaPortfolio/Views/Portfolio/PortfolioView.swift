@@ -358,9 +358,14 @@ struct PortfolioView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("\(transaction.kind.title) · \(transaction.symbol)")
                                 .font(.subheadline.weight(.semibold))
-                            Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.secondaryText)
+                            HStack(spacing: 5) {
+                                Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
+                                if transaction.externalSource?.hasPrefix("trading212:") == true {
+                                    Label("Trading 212", systemImage: "link")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.secondaryText)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 3) {
