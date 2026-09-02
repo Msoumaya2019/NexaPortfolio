@@ -148,6 +148,7 @@ struct DashboardView: View {
               let portfolioID = defaults.string(forKey: portfolioKey),
               let portfolio = portfolios.first(where: { $0.id.uuidString == portfolioID })
         else { return }
+        guard await Trading212SyncGate.shared.acquire() else { return }
 
         trading212SyncInProgress = true
         defer { trading212SyncInProgress = false }
@@ -166,7 +167,9 @@ struct DashboardView: View {
                 context: modelContext
             )
             defaults.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
+            await Trading212SyncGate.shared.release()
         } catch {
+            await Trading212SyncGate.shared.release()
             // Une synchronisation manuelle dans Réglages affichera le détail de l’erreur.
         }
     }

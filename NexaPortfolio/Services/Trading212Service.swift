@@ -78,6 +78,8 @@ enum Trading212Error: LocalizedError {
     case invalidCredentials
     case permissionDenied
     case rateLimited
+    case timedOut
+    case synchronizationAlreadyRunning
     case server(Int, String)
     case invalidResponse
     case keychain(OSStatus)
@@ -93,6 +95,10 @@ enum Trading212Error: LocalizedError {
             return "La clé ne possède pas les autorisations de lecture nécessaires, ou ce type de compte n’est pas pris en charge."
         case .rateLimited:
             return "Trading 212 limite temporairement les requêtes. Réessaie dans une minute."
+        case .timedOut:
+            return "Trading 212 met trop de temps à répondre. La synchronisation a été arrêtée après 90 secondes."
+        case .synchronizationAlreadyRunning:
+            return "Une synchronisation Trading 212 est déjà en cours."
         case let .server(code, message):
             return message.isEmpty ? "Erreur Trading 212 (HTTP \(code))." : "Trading 212 : \(message)"
         case .invalidResponse:
@@ -126,53 +132,84 @@ actor Trading212Client {
         try await request("/api/v0/equity/account/summary", as: Trading212AccountSummary.self)
     }
 
-    func snapshot(since: Date? = nil) async throws -> Trading212Snapshot {
-        async let account = accountSummary()
+    func snapshot(since: Date? = nil, maximumHistoryPages: Int = 6) async throws -> Trading212Snapshot {
+        let deadline = Date.now.addingTimeInterval(90)
+        async let account = request(
+            "/api/v0/equity/account/summary",
+            as: Trading212AccountSummary.self,
+            deadline: deadline
+        )
         async let positions = request(
             "/api/v0/equity/positions",
-            as: [Trading212Position].self
+            as: [Trading212Position].self,
+            deadline: deadline
         )
         async let orders = collectPages(
             startingAt: "/api/v0/equity/history/orders?limit=50",
             itemType: Trading212HistoricalOrder.self,
-            since: since
+            since: since,
+            maximumPages: maximumHistoryPages,
+            deadline: deadline
         )
         async let dividends = collectPages(
             startingAt: "/api/v0/equity/history/dividends?limit=50",
             itemType: Trading212Dividend.self,
-            since: since
+            since: since,
+            maximumPages: maximumHistoryPages,
+            deadline: deadline
         )
 
         let values = try await (account, positions, orders, dividends)
         return Trading212Snapshot(
             account: values.0,
             positions: values.1,
-            orders: values.2,
-            dividends: values.3
+            orders: values.2.items,
+            dividends: values.3.items,
+            ordersHistoryTruncated: values.2.isTruncated,
+            dividendsHistoryTruncated: values.3.isTruncated
         )
     }
 
     private func collectPages<Item: Decodable & Sendable & Trading212DatedItem>(
         startingAt firstPath: String,
         itemType: Item.Type,
-        since: Date?
-    ) async throws -> [Item] {
+        since: Date?,
+        maximumPages: Int,
+        deadline: Date
+    ) async throws -> Trading212HistoryBatch<Item> {
         var path: String? = firstPath
         var visitedPaths = Set<String>()
         var items: [Item] = []
+        var pageCount = 0
+        var isTruncated = false
 
         while let currentPath = path, visitedPaths.insert(currentPath).inserted {
-            let page = try await request(currentPath, as: Trading212Page<Item>.self)
+            guard Date.now < deadline else { throw Trading212Error.timedOut }
+            let page = try await request(
+                currentPath,
+                as: Trading212Page<Item>.self,
+                deadline: deadline
+            )
+            pageCount += 1
             items.append(contentsOf: page.items)
             if let since, page.items.contains(where: { ($0.trading212EventDate ?? .distantFuture) <= since }) {
                 break
             }
             path = page.nextPagePath?.isEmpty == false ? page.nextPagePath : nil
+            if path != nil, pageCount >= max(1, maximumPages) {
+                isTruncated = true
+                break
+            }
         }
-        return items
+        return Trading212HistoryBatch(items: items, isTruncated: isTruncated)
     }
 
-    private func request<Value: Decodable>(_ path: String, as type: Value.Type) async throws -> Value {
+    private func request<Value: Decodable>(
+        _ path: String,
+        as type: Value.Type,
+        deadline: Date? = nil
+    ) async throws -> Value {
+        if let deadline, Date.now >= deadline { throw Trading212Error.timedOut }
         let url = try validatedURL(for: path)
         var request = URLRequest(url: url)
         let rawCredentials = "\(credentials.apiKey):\(credentials.apiSecret)"
@@ -192,6 +229,9 @@ actor Trading212Client {
 
             if http.statusCode == 429, attempt == 0 {
                 let wait = rateLimitWait(from: http)
+                if let deadline, Date.now.addingTimeInterval(wait) >= deadline {
+                    throw Trading212Error.timedOut
+                }
                 try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 continue
             }
@@ -267,6 +307,27 @@ struct Trading212Snapshot: Sendable {
     let positions: [Trading212Position]
     let orders: [Trading212HistoricalOrder]
     let dividends: [Trading212Dividend]
+    let ordersHistoryTruncated: Bool
+    let dividendsHistoryTruncated: Bool
+
+    var historyWasTruncated: Bool {
+        ordersHistoryTruncated || dividendsHistoryTruncated
+    }
+}
+
+actor Trading212SyncGate {
+    static let shared = Trading212SyncGate()
+    private var isRunning = false
+
+    func acquire() -> Bool {
+        guard !isRunning else { return false }
+        isRunning = true
+        return true
+    }
+
+    func release() {
+        isRunning = false
+    }
 }
 
 struct Trading212SyncSummary: Sendable {
@@ -483,6 +544,11 @@ private enum Trading212SymbolMapper {
 private struct Trading212Page<Item: Decodable & Sendable>: Decodable, Sendable {
     let items: [Item]
     let nextPagePath: String?
+}
+
+private struct Trading212HistoryBatch<Item: Decodable & Sendable>: Sendable {
+    let items: [Item]
+    let isTruncated: Bool
 }
 
 struct Trading212AccountSummary: Decodable, Sendable {

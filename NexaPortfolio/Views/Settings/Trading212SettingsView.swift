@@ -181,7 +181,8 @@ struct Trading212SettingsView: View {
         .disabled(isWorking)
         .overlay {
             if isWorking {
-                ProgressView("Communication avec Trading 212…")
+                ProgressView("Synchronisation Trading 212…\nDurée maximale : 90 secondes")
+                    .multilineTextAlignment(.center)
                     .padding(20)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
             }
@@ -316,6 +317,10 @@ struct Trading212SettingsView: View {
 
     private func synchronize() async {
         guard let portfolio = selectedPortfolio else { return }
+        guard await Trading212SyncGate.shared.acquire() else {
+            errorMessage = Trading212Error.synchronizationAlreadyRunning.localizedDescription
+            return
+        }
         isWorking = true
         statusMessage = nil
         defer { isWorking = false }
@@ -336,13 +341,18 @@ struct Trading212SettingsView: View {
             accountSummary = snapshot.account
             lastSyncTimestamp = Date.now.timeIntervalSince1970
             UserDefaults.standard.set(lastSyncTimestamp, forKey: lastSyncPreferenceKey)
-            statusMessage = "\(result.importedOrders) achats/ventes et \(result.importedDividends) dividendes ajoutés · \(result.skippedDuplicates) doublons ignorés · \(result.reconciledPositions) positions vérifiées."
+            let historyWarning = snapshot.historyWasTruncated
+                ? " · historique initial limité aux 300 éléments les plus récents"
+                : ""
+            statusMessage = "\(result.importedOrders) achats/ventes et \(result.importedDividends) dividendes ajoutés · \(result.skippedDuplicates) doublons ignorés · \(result.reconciledPositions) positions vérifiées\(historyWarning)."
             await marketData.refresh(
                 holdings: portfolios.flatMap(\.holdings),
                 watchlistItems: watchlistItems,
                 context: modelContext
             )
+            await Trading212SyncGate.shared.release()
         } catch {
+            await Trading212SyncGate.shared.release()
             errorMessage = error.localizedDescription
         }
     }
