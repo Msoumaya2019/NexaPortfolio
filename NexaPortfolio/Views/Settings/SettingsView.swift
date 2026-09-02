@@ -62,7 +62,7 @@ struct SettingsView: View {
                         Label("Trade Republic", systemImage: "doc.richtext")
                     }
 
-                    Text("Importe localement les confirmations d’exécution et relevés de dividendes PDF, sans PIN ni code 2FA.")
+                    Text("Importe localement l’export de transactions CSV ou les relevés PDF, sans PIN ni code 2FA.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -75,7 +75,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.6.2")
+                    LabeledContent("Version", value: "1.7.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

@@ -28,7 +28,7 @@ struct TradeRepublicSettingsView: View {
     var body: some View {
         Form {
             Section("Import Trade Republic") {
-                Label("Lecture locale des PDF officiels", systemImage: "lock.shield.fill")
+                Label("Lecture locale des CSV et PDF officiels", systemImage: "lock.shield.fill")
                     .foregroundStyle(AppTheme.positive)
                 Text("Trade Republic ne propose pas d’API publique pour le portefeuille. Nexa Portfolio lit uniquement le document que tu sélectionnes et ne demande jamais ton numéro, ton PIN ou ton code 2FA.")
                     .font(.footnote)
@@ -58,7 +58,9 @@ struct TradeRepublicSettingsView: View {
                     Label("Créer un portefeuille Trade Republic", systemImage: "plus.rectangle.on.folder")
                 }
 
-                if selectedPortfolio?.transactions.contains(where: { $0.externalSource != "traderepublic:pdf" }) == true {
+                if selectedPortfolio?.transactions.contains(where: {
+                    $0.externalSource?.hasPrefix("traderepublic:") != true
+                }) == true {
                     Label(
                         "Ce portefeuille contient déjà d’autres opérations. Un portefeuille Trade Republic séparé évite les doubles saisies.",
                         systemImage: "exclamationmark.triangle.fill"
@@ -68,10 +70,10 @@ struct TradeRepublicSettingsView: View {
                 }
             }
 
-            Section("Document à télécharger") {
+            Section("Export à télécharger") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Profil > transaction > Documents", systemImage: "doc.text.magnifyingglass")
-                    Text("Télécharge la confirmation d’exécution de l’achat ou de la vente, ou le relevé du dividende. N’utilise pas le document d’information préalable sur les coûts.")
+                    Label("Profil > Relevés et export de transactions", systemImage: "doc.text.magnifyingglass")
+                    Text("Choisis l’export CSV destiné aux outils de suivi et la période la plus large possible. Les confirmations d’exécution et relevés de dividendes PDF restent également compatibles.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -81,11 +83,11 @@ struct TradeRepublicSettingsView: View {
                 Button {
                     showingFileImporter = true
                 } label: {
-                    Label("Choisir un PDF Trade Republic", systemImage: "doc.badge.plus")
+                    Label("Choisir un CSV ou PDF Trade Republic", systemImage: "doc.badge.plus")
                 }
                 .disabled(isWorking || selectedPortfolio == nil)
 
-                Text("Sélectionne un ou plusieurs PDF, puis appuie sur « Ouvrir ». Les doublons sont reconnus automatiquement.")
+                Text("Sélectionne un ou plusieurs exports, puis appuie sur « Ouvrir ». Les achats, ventes et dividendes sont importés ; les doublons sont reconnus automatiquement.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -176,7 +178,7 @@ struct TradeRepublicSettingsView: View {
         defer { isWorking = false }
 
         do {
-            let summary = try await TradeRepublicPDFImporter.importDocuments(
+            let summary = try await TradeRepublicDocumentImporter.importDocuments(
                 at: urls,
                 into: portfolio,
                 context: modelContext

@@ -19,7 +19,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - connexion Trading 212 Démo ou Réel en lecture seule, avec clés conservées dans le trousseau iOS ;
 - synchronisation sans doublons des achats, ventes et dividendes Trading 212, puis rapprochement des positions et liquidités au lancement ou au retour dans l’app ;
 - import sans doublons des achats, ventes et dividendes DEGIRO à partir des relevés CSV officiels, sans transmettre les identifiants du compte ;
-- import local des confirmations d’exécution et relevés de dividendes PDF Trade Republic, avec détection des doublons et sans identifiants de connexion ;
+- import local de l’export de transactions CSV ou des confirmations et relevés PDF Trade Republic, avec détection des doublons et sans identifiants de connexion ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;
@@ -90,8 +90,8 @@ Sélectionne la période la plus large possible lors du premier export. Dans le 
 
 ## Import Trade Republic
 
-Trade Republic ne fournit pas d’API publique pour consulter le portefeuille. Dans **Réglages > Trade Republic**, Nexa Portfolio importe donc localement les documents PDF officiels téléchargés depuis le profil Trade Republic. L’application ne demande jamais le numéro de téléphone, le PIN, le code 2FA ou un jeton de session.
+Trade Republic ne fournit pas d’API publique pour consulter le portefeuille. Dans **Réglages > Trade Republic**, Nexa Portfolio importe donc localement l’export de transactions CSV destiné aux outils de suivi. L’application ne demande jamais le numéro de téléphone, le PIN, le code 2FA ou un jeton de session.
 
-Depuis le profil Trade Republic, ouvre une transaction exécutée puis sa liste de documents. Télécharge la **confirmation d’exécution** pour un achat ou une vente, ou le **relevé de dividende**. Dans Nexa Portfolio, sélectionne un ou plusieurs PDF puis appuie sur **Ouvrir**. Les informations préalables sur les coûts et les documents sans opération exécutée sont ignorés. L’import reconnaît les modèles français ainsi que plusieurs modèles européens courants, extrait l’ISIN, la quantité, le cours, les frais et le montant net versé, puis utilise une empreinte stable pour empêcher les doublons.
+Depuis **Profil > Relevés et export de transactions**, télécharge l’**export CSV pour outils de suivi** sur la période la plus large possible. Dans Nexa Portfolio, sélectionne le CSV puis appuie sur **Ouvrir**. Les lignes `BUY`, `SELL` et `DIVIDEND` sont importées ; les mouvements d’espèces, paiements par carte et intérêts sont ignorés. L’identifiant `transaction_id` empêche les doublons et les colonnes `fee` et `tax` sont prises en compte. Les confirmations d’exécution et relevés de dividendes PDF restent également compatibles.
 
 Les documents sont traités sur l’iPhone. Seul l’ISIN est ensuite utilisé lors de la recherche du symbole boursier et des cours. Comme Trade Republic peut modifier la mise en page de ses PDF, conserve les originaux et vérifie les premières opérations importées.
