@@ -93,7 +93,7 @@ struct DegiroSettingsView: View {
                 }
                 .disabled(isWorking || selectedPortfolio == nil)
 
-                Text("Choisis d’abord le relevé Transactions, puis recommence avec le relevé Compte. Un simple appui sur le fichier lance l’import ; les opérations déjà importées ne sont pas ajoutées deux fois.")
+                Text("Sélectionne le relevé Transactions et le relevé Compte, puis appuie sur « Ouvrir ». Tu peux aussi les importer séparément. Les opérations déjà importées ne sont pas ajoutées deux fois.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -135,12 +135,14 @@ struct DegiroSettingsView: View {
         .fileImporter(
             isPresented: $showingFileImporter,
             // Le type le plus large évite les classifications CSV incohérentes
-            // des fournisseurs de fichiers. Le parseur valide ensuite le contenu.
-            allowedContentTypes: [.item]
+            // des fournisseurs de fichiers. La sélection multiple affiche le
+            // bouton système « Ouvrir » avant de lancer l'import.
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
         ) { result in
             switch result {
-            case let .success(url):
-                Task { await importDocuments([url]) }
+            case let .success(urls):
+                Task { await importDocuments(urls) }
             case let .failure(error):
                 errorMessage = error.localizedDescription
             }

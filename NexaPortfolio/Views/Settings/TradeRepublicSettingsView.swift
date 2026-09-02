@@ -85,7 +85,7 @@ struct TradeRepublicSettingsView: View {
                 }
                 .disabled(isWorking || selectedPortfolio == nil)
 
-                Text("Appuie sur un PDF pour l’importer immédiatement, puis recommence pour chaque document. Les doublons sont reconnus automatiquement.")
+                Text("Sélectionne un ou plusieurs PDF, puis appuie sur « Ouvrir ». Les doublons sont reconnus automatiquement.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -126,11 +126,15 @@ struct TradeRepublicSettingsView: View {
         }
         .fileImporter(
             isPresented: $showingFileImporter,
-            allowedContentTypes: [.item]
+            // Le type générique laisse les documents sélectionnables même si
+            // l'app Fichiers ne leur attribue pas correctement le type PDF.
+            // La sélection multiple rétablit le bouton système « Ouvrir ».
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
         ) { result in
             switch result {
-            case let .success(url):
-                Task { await importDocument(url) }
+            case let .success(urls):
+                Task { await importDocuments(urls) }
             case let .failure(error):
                 errorMessage = error.localizedDescription
             }
@@ -157,7 +161,7 @@ struct TradeRepublicSettingsView: View {
         }
     }
 
-    private func importDocument(_ url: URL) async {
+    private func importDocuments(_ urls: [URL]) async {
         guard let portfolio = selectedPortfolio else { return }
         isWorking = true
         statusMessage = nil
@@ -165,7 +169,7 @@ struct TradeRepublicSettingsView: View {
 
         do {
             let summary = try await TradeRepublicPDFImporter.importDocuments(
-                at: [url],
+                at: urls,
                 into: portfolio,
                 context: modelContext
             )
