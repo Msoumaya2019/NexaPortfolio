@@ -20,6 +20,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - synchronisation sans doublons des achats, ventes et dividendes Trading 212, puis rapprochement des positions et liquidités au lancement ou au retour dans l’app ;
 - import sans doublons des achats, ventes et dividendes DEGIRO à partir des relevés CSV officiels, sans transmettre les identifiants du compte ;
 - import local de l’export de transactions CSV ou des confirmations et relevés PDF Trade Republic, avec détection des doublons et sans identifiants de connexion ;
+- avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
+- avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;
@@ -76,6 +78,15 @@ Dans **Réglages > Trading 212**, choisis le compte Démo ou Réel, puis saisis 
 Un portefeuille Trading 212 séparé est recommandé afin d’éviter qu’une ancienne saisie manuelle représente deux fois la même opération. La synchronisation importe les exécutions d’ordres et les dividendes avec leurs identifiants externes, puis utilise les positions ouvertes du courtier pour réconcilier les quantités et prix moyens. Lorsque l’option automatique est active, une vérification peut avoir lieu au lancement ou au retour dans l’application, avec un intervalle minimal de quinze minutes. Pour respecter les limites de l’API, l’import initial traite au maximum 300 ordres et 300 dividendes récents et s’arrête après 90 secondes si le service ne répond pas assez vite.
 
 Les données et calculs sont indicatifs et ne constituent pas un conseil financier.
+
+## Avis des analystes et avis IA
+
+Dans **Réglages > Analystes et avis IA**, crée puis enregistre une clé API personnelle Alpha Vantage. La clé reste dans le Trousseau iOS. Sur la fiche de chaque action, Nexa présente ensuite deux catégories volontairement séparées :
+
+1. **Avis des analystes — Alpha Vantage** : objectif moyen, potentiel par rapport au cours et répartition des recommandations fournis par Alpha Vantage ;
+2. **Avis IA — Nexa** : score multifactoriel calculé localement à partir des indicateurs disponibles, accompagné de son niveau de confiance et de ses principaux facteurs.
+
+L’avis IA n’invente pas d’objectif de cours et n’est jamais présenté comme une recommandation Alpha Vantage. Les résultats sont mis en cache pendant 24 heures. La couverture dépend du fournisseur : certains titres, ETF ou marchés secondaires peuvent ne pas disposer de données. Ces deux avis sont informatifs, peuvent être incomplets ou erronés et ne constituent pas un conseil financier.
 
 ## Import DEGIRO
 

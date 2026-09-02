@@ -67,6 +67,18 @@ struct SettingsView: View {
                         .foregroundStyle(AppTheme.secondaryText)
                 }
 
+                Section("Analyse") {
+                    NavigationLink {
+                        AnalystSettingsView()
+                    } label: {
+                        Label("Analystes et avis IA", systemImage: "sparkles")
+                    }
+
+                    Text("Affiche séparément les objectifs et consensus Alpha Vantage, puis l’avis du modèle local de Nexa pour chaque action.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
                 Section("À propos des cours") {
                     Label("Actualisation manuelle et sans clé API", systemImage: "network")
                     Text("Les cours sont obtenus depuis un service public et peuvent être retardés ou indisponibles. Les valeurs sont indicatives.")
@@ -75,7 +87,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.7.0")
+                    LabeledContent("Version", value: "1.8.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
