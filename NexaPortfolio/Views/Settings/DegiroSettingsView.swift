@@ -93,7 +93,7 @@ struct DegiroSettingsView: View {
                 }
                 .disabled(isWorking || selectedPortfolio == nil)
 
-                Text("Tu peux sélectionner les deux relevés en une seule fois. Les opérations déjà importées sont reconnues automatiquement et ne sont pas ajoutées deux fois.")
+                Text("Choisis d’abord le relevé Transactions, puis recommence avec le relevé Compte. Un simple appui sur le fichier lance l’import ; les opérations déjà importées ne sont pas ajoutées deux fois.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
 
@@ -134,14 +134,13 @@ struct DegiroSettingsView: View {
         }
         .fileImporter(
             isPresented: $showingFileImporter,
-            // DEGIRO et certaines apps de stockage déclarent leurs CSV avec un
-            // type générique. Le parseur contrôle ensuite réellement le contenu.
-            allowedContentTypes: [.data],
-            allowsMultipleSelection: true
+            // Le type le plus large évite les classifications CSV incohérentes
+            // des fournisseurs de fichiers. Le parseur valide ensuite le contenu.
+            allowedContentTypes: [.item]
         ) { result in
             switch result {
-            case let .success(urls):
-                Task { await importDocuments(urls) }
+            case let .success(url):
+                Task { await importDocuments([url]) }
             case let .failure(error):
                 errorMessage = error.localizedDescription
             }
