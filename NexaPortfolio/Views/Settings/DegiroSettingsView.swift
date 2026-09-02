@@ -134,7 +134,9 @@ struct DegiroSettingsView: View {
         }
         .fileImporter(
             isPresented: $showingFileImporter,
-            allowedContentTypes: [.commaSeparatedText, .plainText],
+            // DEGIRO et certaines apps de stockage déclarent leurs CSV avec un
+            // type générique. Le parseur contrôle ensuite réellement le contenu.
+            allowedContentTypes: [.data],
             allowsMultipleSelection: true
         ) { result in
             switch result {
