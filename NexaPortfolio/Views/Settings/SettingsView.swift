@@ -65,6 +65,16 @@ struct SettingsView: View {
                     Text("Importe localement l’export de transactions CSV ou les relevés PDF, sans PIN ni code 2FA.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
+
+                    NavigationLink {
+                        RevolutSettingsView()
+                    } label: {
+                        Label("Revolut", systemImage: "building.columns.fill")
+                    }
+
+                    Text("Importe localement l’historique CSV d’investissements Revolut, sans identifiant ni code de connexion.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 Section("Analyse") {
@@ -87,7 +97,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.8.0")
+                    LabeledContent("Version", value: "1.9.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

@@ -20,6 +20,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - synchronisation sans doublons des achats, ventes et dividendes Trading 212, puis rapprochement des positions et liquidités au lancement ou au retour dans l’app ;
 - import sans doublons des achats, ventes et dividendes DEGIRO à partir des relevés CSV officiels, sans transmettre les identifiants du compte ;
 - import local de l’export de transactions CSV ou des confirmations et relevés PDF Trade Republic, avec détection des doublons et sans identifiants de connexion ;
+- import local de l’historique CSV d’investissements Revolut : achats, ventes, dividendes, corrections fiscales, splits et fusions ;
 - avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
 - avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;
@@ -106,3 +107,11 @@ Trade Republic ne fournit pas d’API publique pour consulter le portefeuille. D
 Depuis **Profil > Relevés et export de transactions**, télécharge l’**export CSV pour outils de suivi** sur la période la plus large possible. Dans Nexa Portfolio, sélectionne le CSV puis appuie sur **Ouvrir**. Les lignes `BUY`, `SELL` et `DIVIDEND` sont importées ; les mouvements d’espèces, paiements par carte et intérêts sont ignorés. L’identifiant `transaction_id` empêche les doublons et les colonnes `fee` et `tax` sont prises en compte. Les confirmations d’exécution et relevés de dividendes PDF restent également compatibles.
 
 Les documents sont traités sur l’iPhone. Seul l’ISIN est ensuite utilisé lors de la recherche du symbole boursier et des cours. Comme Trade Republic peut modifier la mise en page de ses PDF, conserve les originaux et vérifie les premières opérations importées.
+
+## Import Revolut
+
+Revolut ne fournit pas d’API publique pour synchroniser automatiquement les actions d’un compte personnel. Dans **Réglages > Revolut**, crée ou sélectionne un portefeuille, puis choisis l’export CSV de tes investissements. Le format reconnu contient les colonnes `Date`, `Ticker`, `Type`, `Quantity`, `Price per share`, `Total Amount`, `Currency` et `FX Rate`.
+
+Nexa importe les achats au marché ou à cours limité, les ventes au marché, stop ou à cours limité, les dividendes, les corrections fiscales de dividendes, les splits et les fusions en titres. Les dépôts, retraits, récompenses, frais de garde et mouvements internes sans titre sont ignorés. Chaque ligne reçoit une empreinte stable afin qu’un même export puisse être réimporté sans créer de doublons.
+
+Le fichier est traité localement sur l’iPhone et aucun numéro de téléphone, PIN, code 2FA ou jeton Revolut n’est demandé. Les ajustements de quantité à prix nul préservent le coût total de la position ; après une fusion entre deux symboles, vérifie néanmoins le prix d’achat moyen et utilise sa correction manuelle si nécessaire.

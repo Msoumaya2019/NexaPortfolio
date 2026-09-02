@@ -189,7 +189,16 @@ enum PortfolioLedger {
                     let soldQuantity = min(transaction.quantity, state.quantity)
                     let averageCost = state.totalCost / state.quantity
                     state.quantity -= soldQuantity
-                    state.totalCost -= soldQuantity * averageCost
+                    let isShareAdjustment = transaction.price == 0
+                        && transaction.fees == 0
+                        && (
+                            transaction.notes.localizedCaseInsensitiveContains("ajustement de titres")
+                            || transaction.notes.localizedCaseInsensitiveContains("fractionnement de titres")
+                            || transaction.notes.localizedCaseInsensitiveContains("regroupement de titres")
+                        )
+                    if !isShareAdjustment {
+                        state.totalCost -= soldQuantity * averageCost
+                    }
                     if state.quantity <= 0.000_000_1 {
                         states.removeValue(forKey: symbol)
                     } else {
