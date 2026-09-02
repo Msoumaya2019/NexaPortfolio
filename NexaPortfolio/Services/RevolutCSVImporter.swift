@@ -501,6 +501,6 @@ private extension String {
     var normalizedRevolutHeader: String {
         folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
-            .filter(\.isLetterOrNumber)
+            .filter { $0.isLetter || $0.isNumber }
     }
 }
