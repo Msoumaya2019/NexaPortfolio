@@ -124,20 +124,14 @@ struct TradeRepublicSettingsView: View {
                 selectedPortfolioID = portfolios.first?.id.uuidString ?? ""
             }
         }
-        .fileImporter(
-            isPresented: $showingFileImporter,
-            // Le type générique laisse les documents sélectionnables même si
-            // l'app Fichiers ne leur attribue pas correctement le type PDF.
-            // La sélection multiple rétablit le bouton système « Ouvrir ».
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case let .success(urls):
-                Task { await importDocuments(urls) }
-            case let .failure(error):
-                errorMessage = error.localizedDescription
-            }
+        .sheet(isPresented: $showingFileImporter) {
+            LocalDocumentPicker(
+                contentTypes: [.item],
+                allowsMultipleSelection: true,
+                onSelection: receiveDocuments,
+                onCancel: { showingFileImporter = false }
+            )
+            .ignoresSafeArea()
         }
         .alert("Import Trade Republic impossible", isPresented: Binding(
             get: { errorMessage != nil },
@@ -158,6 +152,20 @@ struct TradeRepublicSettingsView: View {
             statusMessage = "Portefeuille Trade Republic créé."
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func receiveDocuments(_ urls: [URL]) {
+        do {
+            let stagedDocuments = try LocalDocumentStager.stage(urls)
+            showingFileImporter = false
+            Task {
+                defer { LocalDocumentStager.remove(stagedDocuments) }
+                await importDocuments(stagedDocuments.urls)
+            }
+        } catch {
+            showingFileImporter = false
+            errorMessage = "Le fichier sélectionné n’a pas pu être copié dans l’application : \(error.localizedDescription)"
         }
     }
 
