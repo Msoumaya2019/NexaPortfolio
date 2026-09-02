@@ -133,7 +133,7 @@ final class Holding {
     }
 }
 
-enum TransactionKind: String, Codable, CaseIterable, Identifiable {
+enum TransactionKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case buy
     case sell
     case dividend

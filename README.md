@@ -18,6 +18,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - correction manuelle du prix moyen ou de la valeur totale d’achat de chaque position ;
 - connexion Trading 212 Démo ou Réel en lecture seule, avec clés conservées dans le trousseau iOS ;
 - synchronisation sans doublons des achats, ventes et dividendes Trading 212, puis rapprochement des positions et liquidités au lancement ou au retour dans l’app ;
+- import sans doublons des achats, ventes et dividendes DEGIRO à partir des relevés CSV officiels, sans transmettre les identifiants du compte ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;
@@ -65,7 +66,7 @@ Le workflow `.github/workflows/build-unsigned-ipa.yml` fait la même compilation
 
 ## Source des cours
 
-La version 1.4 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
+La version 1.5 interroge des endpoints publics Yahoo Finance sans clé API. Ils peuvent être retardés, modifiés ou temporairement indisponibles et ne conviennent pas à une distribution commerciale sans vérifier les conditions d’utilisation. Pour une publication App Store, remplace `MarketDataClient` par un fournisseur officiel disposant d’un contrat et d’une API documentée.
 
 ## Connexion Trading 212
 
@@ -74,3 +75,14 @@ Dans **Réglages > Trading 212**, choisis le compte Démo ou Réel, puis saisis 
 Un portefeuille Trading 212 séparé est recommandé afin d’éviter qu’une ancienne saisie manuelle représente deux fois la même opération. La synchronisation importe les exécutions d’ordres et les dividendes avec leurs identifiants externes, puis utilise les positions ouvertes du courtier pour réconcilier les quantités et prix moyens. Lorsque l’option automatique est active, une vérification peut avoir lieu au lancement ou au retour dans l’application, avec un intervalle minimal de quinze minutes. Pour respecter les limites de l’API, l’import initial traite au maximum 300 ordres et 300 dividendes récents et s’arrête après 90 secondes si le service ne répond pas assez vite.
 
 Les données et calculs sont indicatifs et ne constituent pas un conseil financier.
+
+## Import DEGIRO
+
+DEGIRO ne fournit actuellement aucune API officielle permettant de connecter un compte à une application tierce et indique que les connecteurs non officiels ne sont pas pris en charge. Nexa Portfolio ne demande donc jamais le nom d’utilisateur, le mot de passe ou le code 2FA DEGIRO.
+
+Dans **Réglages > DEGIRO**, crée ou sélectionne un portefeuille, puis choisis les fichiers CSV exportés depuis DEGIRO :
+
+1. **Courriel > Transactions** pour les achats et les ventes ;
+2. **Courriel > Compte** pour les dividendes versés.
+
+Sélectionne la période la plus large possible lors du premier export. Les fichiers français, anglais et néerlandais les plus courants sont reconnus, ainsi que les nombres utilisant une virgule décimale. Chaque ligne reçoit une empreinte stable afin qu’un relevé importé une seconde fois ne crée pas de doublon. Les symboles boursiers sont recherchés à partir de l’ISIN ; lorsqu’aucune correspondance n’est trouvée, l’ISIN reste affiché et le titre peut nécessiter une correction manuelle.

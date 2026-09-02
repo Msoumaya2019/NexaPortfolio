@@ -362,6 +362,8 @@ struct PortfolioView: View {
                                 Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
                                 if transaction.externalSource?.hasPrefix("trading212:") == true {
                                     Label("Trading 212", systemImage: "link")
+                                } else if transaction.externalSource == "degiro:csv" {
+                                    Label("DEGIRO", systemImage: "doc.text")
                                 }
                             }
                             .font(.caption)

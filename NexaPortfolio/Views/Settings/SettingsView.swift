@@ -45,6 +45,16 @@ struct SettingsView: View {
                     Text("Importe automatiquement les achats, ventes, dividendes, positions et liquidités avec une clé API en lecture seule.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
+
+                    NavigationLink {
+                        DegiroSettingsView()
+                    } label: {
+                        Label("DEGIRO", systemImage: "doc.text.magnifyingglass")
+                    }
+
+                    Text("Importe les achats, ventes et dividendes depuis les relevés CSV officiels, sans identifiant ni mot de passe.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
 
                 Section("À propos des cours") {
@@ -55,7 +65,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "1.4.1")
+                    LabeledContent("Version", value: "1.5.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }
