@@ -107,7 +107,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "2.1.0")
+                    LabeledContent("Version", value: "2.2.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

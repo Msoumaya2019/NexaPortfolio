@@ -2,6 +2,22 @@ import SwiftUI
 import SwiftData
 import Charts
 
+private enum DashboardPositionSort: String, CaseIterable, Identifiable {
+    case value
+    case alphabetical
+    case dividendYield
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .value: "Valeur détenue"
+        case .alphabetical: "Ordre alphabétique"
+        case .dividendYield: "Dividende le plus élevé"
+        }
+    }
+}
+
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -17,6 +33,7 @@ struct DashboardView: View {
     @AppStorage("trading212.environment") private var trading212EnvironmentRawValue = Trading212Environment.demo.rawValue
     @AppStorage("trading212.autoSync") private var trading212AutoSync = true
     @AppStorage("boursobank.autoSync") private var boursoBankAutoSync = true
+    @AppStorage("dashboard.positionSort") private var positionSortRawValue = DashboardPositionSort.value.rawValue
     @State private var trading212SyncInProgress = false
     @State private var boursoBankSyncInProgress = false
 
@@ -48,6 +65,33 @@ struct DashboardView: View {
         return estimatedAnnualDividendIncome / holdingsValue * 100
     }
 
+    private var positionSort: DashboardPositionSort {
+        DashboardPositionSort(rawValue: positionSortRawValue) ?? .value
+    }
+
+    private var sortedPositions: [Holding] {
+        let positions = holdings.filter { $0.quantity > 0 }
+        return positions.sorted { lhs, rhs in
+            switch positionSort {
+            case .value:
+                if lhs.marketValueInPortfolioCurrency != rhs.marketValueInPortfolioCurrency {
+                    return lhs.marketValueInPortfolioCurrency > rhs.marketValueInPortfolioCurrency
+                }
+            case .alphabetical:
+                let comparison = lhs.symbol.localizedCaseInsensitiveCompare(rhs.symbol)
+                if comparison != .orderedSame { return comparison == .orderedAscending }
+            case .dividendYield:
+                if lhs.dividendYieldPercent != rhs.dividendYieldPercent {
+                    return lhs.dividendYieldPercent > rhs.dividendYieldPercent
+                }
+                if lhs.estimatedAnnualDividendIncome != rhs.estimatedAnnualDividendIncome {
+                    return lhs.estimatedAnnualDividendIncome > rhs.estimatedAnnualDividendIncome
+                }
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
+
     private var marketDataIsStale: Bool {
         let cutoff = Date.now.addingTimeInterval(-15 * 60)
         let dates = holdings.map(\.lastUpdated) + watchlistItems.map(\.lastUpdated)
@@ -76,7 +120,7 @@ struct DashboardView: View {
                     } else {
                         allocationCard
                         dividendIncomeCard
-                        topMoversCard
+                        positionsCard
                     }
 
                     recentActivityCard
@@ -312,12 +356,29 @@ struct DashboardView: View {
         .appCard()
     }
 
-    private var topMoversCard: some View {
+    private var positionsCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Positions")
-                .font(.headline)
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Toutes les positions")
+                        .font(.headline)
+                    Text("\(sortedPositions.count) position\(sortedPositions.count > 1 ? "s" : "")")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                Spacer()
+                Picker("Trier les positions", selection: $positionSortRawValue) {
+                    ForEach(DashboardPositionSort.allCases) { sort in
+                        Text(sort.title).tag(sort.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .tint(AppTheme.accent)
+            }
 
-            ForEach(holdings.sorted { abs($0.dailyChangePercent) > abs($1.dailyChangePercent) }.prefix(4)) { holding in
+            let positions = sortedPositions
+            ForEach(Array(positions.enumerated()), id: \.element.id) { index, holding in
                 HStack(spacing: 12) {
                     SymbolBadge(symbol: holding.symbol)
                     VStack(alignment: .leading, spacing: 3) {
@@ -327,20 +388,42 @@ struct DashboardView: View {
                             .font(.caption)
                             .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
-                        if holding.dividendYieldPercent > 0 {
-                            Text("Div. \(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2)))")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(AppTheme.accent)
+                        if let portfolioName = holding.portfolio?.name, !portfolioName.isEmpty {
+                            Text(portfolioName)
+                                .font(.caption2)
+                                .foregroundStyle(AppTheme.secondaryText)
+                                .lineLimit(1)
                         }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text(holding.currentPrice.currency(holding.currencyCode))
+                        Text(
+                            hideBalances
+                                ? "••••"
+                                : holding.marketValueInPortfolioCurrency.currency(
+                                    holding.portfolio?.currencyCode ?? primaryCurrency
+                                )
+                        )
                             .font(.subheadline.weight(.semibold))
                         Text(holding.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(holding.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                        if holding.dividendYieldPercent > 0 {
+                            Text("Div. \(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2))) · \(hideBalances ? "••••/an" : holding.estimatedAnnualDividendIncome.currency(holding.portfolio?.currencyCode ?? primaryCurrency) + "/an")")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .lineLimit(1)
+                        } else {
+                            Text("Aucun dividende détecté")
+                                .font(.caption2)
+                                .foregroundStyle(AppTheme.secondaryText)
+                        }
                     }
+                }
+
+                if index < positions.count - 1 {
+                    Divider()
+                        .overlay(AppTheme.secondaryText.opacity(0.12))
                 }
             }
         }
