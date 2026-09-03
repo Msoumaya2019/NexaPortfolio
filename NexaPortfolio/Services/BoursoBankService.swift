@@ -157,6 +157,7 @@ struct BoursoBankMFAChallenge: Sendable {
 
 struct BoursoBankTradingAccount: Identifiable, Hashable, Sendable {
     let id: String
+    let alternateID: String?
     let name: String
     let displayedBalance: Double
     let bankName: String
@@ -544,19 +545,38 @@ actor BoursoBankClient {
               Self.isSafeIdentifier(userHash)
         else { throw BoursoBankError.invalidResponse }
 
-        let url = try validatedAPIURL(
-            "\(configuration.apiURL)/_user_/_\(userHash)/trading/accounts/summary/\(account.id)?_host=tradingboard.boursobank.com&position=ACCOUNTING&responseFormat=true"
-        )
-        var request = URLRequest(url: url)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await perform(request)
-        if response.statusCode == 401 || response.statusCode == 403 {
-            authenticated = false
-            try? BoursoBankSessionKeychain.delete()
-            throw BoursoBankError.sessionExpired
+        let candidateIDs = [account.id, account.alternateID]
+            .compactMap { $0 }
+            .filter { Self.isHexAccountID($0) }
+            .reduce(into: [String]()) { values, candidate in
+                if !values.contains(candidate) { values.append(candidate) }
+            }
+
+        var responseData: Data?
+        var lastStatusCode = 404
+        for candidateID in candidateIDs {
+            let url = try validatedAPIURL(
+                "\(configuration.apiURL)/_user_/_\(userHash)_/trading/accounts/summary/\(candidateID)?_host=tradingboard.boursobank.com&position=ACCOUNTING&responseFormat=true"
+            )
+            var request = URLRequest(url: url)
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            let (data, response) = try await perform(request)
+            if response.statusCode == 401 || response.statusCode == 403 {
+                authenticated = false
+                try? BoursoBankSessionKeychain.delete()
+                throw BoursoBankError.sessionExpired
+            }
+            if (200...299).contains(response.statusCode) {
+                responseData = data
+                break
+            }
+            lastStatusCode = response.statusCode
+            if response.statusCode != 404 {
+                throw BoursoBankError.server(response.statusCode)
+            }
         }
-        guard (200...299).contains(response.statusCode) else {
-            throw BoursoBankError.server(response.statusCode)
+        guard let data = responseData else {
+            throw BoursoBankError.server(lastStatusCode)
         }
 
         let items: [BoursoBankTradingSummaryItem]
@@ -816,14 +836,33 @@ actor BoursoBankClient {
             throw BoursoBankError.incompatiblePage("liste des comptes-titres absente")
         }
         let section = String(page[sectionStart.lowerBound..<sectionEnd.upperBound])
-        let pattern = #"data-account-label="([a-fA-F0-9]{32})"[^>]*>\s*(.*?)\s*</span>.*?c-info-box__account-balance[^>]*>\s*(.*?)\s*</span>.*?c-info-box__account-sub-label[^>]*>\s*(.*?)\s*</span>"#
-        return section.captures(for: pattern, options: [.dotMatchesLineSeparators]).compactMap { groups in
-            guard groups.count >= 4 else { return nil }
+        let accountLinks = section.captures(
+            for: #"<a\b[^>]*href="(/compte/[^"]+)"[^>]*>(.*?)</a>"#,
+            options: [.dotMatchesLineSeparators]
+        )
+        return accountLinks.compactMap { groups in
+            guard groups.count >= 2,
+                  let linkID = groups[0].firstCapture(for: #"/([a-fA-F0-9]{32})(?:/|$)"#),
+                  let name = groups[1].firstCapture(
+                    for: #"data-account-label="[^"]*"[^>]*>\s*(.*?)\s*</span>"#,
+                    options: [.dotMatchesLineSeparators]
+                  ),
+                  let balance = groups[1].firstCapture(
+                    for: #"c-info-box__account-balance[^>]*>\s*(.*?)\s*</span>"#,
+                    options: [.dotMatchesLineSeparators]
+                  ),
+                  let bankName = groups[1].firstCapture(
+                    for: #"c-info-box__account-sub-label[^>]*>\s*(.*?)\s*</span>"#,
+                    options: [.dotMatchesLineSeparators]
+                  )
+            else { return nil }
+            let alternateID = groups[1].firstCapture(for: #"data-account-label="([a-fA-F0-9]{32})""#)
             return BoursoBankTradingAccount(
-                id: groups[0].lowercased(),
-                name: groups[1].strippingHTML,
-                displayedBalance: parseFrenchAmount(groups[2].strippingHTML),
-                bankName: groups[3].strippingHTML
+                id: linkID.lowercased(),
+                alternateID: alternateID?.lowercased(),
+                name: name.strippingHTML,
+                displayedBalance: parseFrenchAmount(balance.strippingHTML),
+                bankName: bankName.strippingHTML
             )
         }
     }

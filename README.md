@@ -23,6 +23,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - import local de l’historique CSV d’investissements Revolut : achats, ventes, dividendes, corrections fiscales, splits et fusions ;
 - connexion non officielle BoursoBank en lecture seule avec validation forte, synchronisation des positions, quantités, PRU, cours et liquidités du PEA ou du compte-titres ;
 - conservation chiffrée de la session BoursoBank dans le Trousseau iOS pour une synchronisation silencieuse au lancement et au retour dans l’application ;
+- compatibilité avec l’identifiant réel des PEA BoursoBank et le format actuel de l’endpoint de synthèse (correctif 2.0.1) ;
 - avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
 - avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;

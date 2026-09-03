@@ -198,6 +198,7 @@ struct BoursoBankSettingsView: View {
         .onChange(of: selectedPortfolioID) { _, newValue in
             guard !selectedAccountID.isEmpty else { return }
             UserDefaults.standard.set(newValue, forKey: portfolioPreferenceKey)
+            UserDefaults.standard.set(newValue, forKey: "boursobank.lastPortfolioID")
         }
         .alert("Connexion BoursoBank", isPresented: Binding(
             get: { errorMessage != nil },
@@ -324,11 +325,14 @@ struct BoursoBankSettingsView: View {
 
     @MainActor
     private func loadPortfolioPreference() {
-        selectedPortfolioID = UserDefaults.standard.string(forKey: portfolioPreferenceKey) ?? ""
+        selectedPortfolioID = UserDefaults.standard.string(forKey: portfolioPreferenceKey)
+            ?? UserDefaults.standard.string(forKey: "boursobank.lastPortfolioID")
+            ?? ""
         if selectedPortfolio == nil {
             selectedPortfolioID = portfolios.first?.id.uuidString ?? ""
         }
         UserDefaults.standard.set(selectedAccountID, forKey: "boursobank.accountID")
+        UserDefaults.standard.set(selectedPortfolioID, forKey: portfolioPreferenceKey)
     }
 
     @MainActor
