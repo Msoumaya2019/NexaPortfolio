@@ -104,13 +104,14 @@ struct BoursoBankSettingsView: View {
 
             if !tradingAccounts.isEmpty {
                 Section("Compte à synchroniser") {
-                    Picker("PEA ou compte-titres", selection: $selectedAccountID) {
+                    Picker("Compte d’investissement", selection: $selectedAccountID) {
                         ForEach(tradingAccounts) { account in
                             Text(account.name).tag(account.id)
                         }
                     }
 
                     if let selectedAccount {
+                        LabeledContent("Type", value: selectedAccount.kind.displayName)
                         LabeledContent("Solde affiché", value: selectedAccount.displayedBalance.currency("EUR"))
                     }
                 }
@@ -310,7 +311,7 @@ struct BoursoBankSettingsView: View {
         tradingAccounts = try await client.tradingAccounts()
         isConnected = true
         selectInitialAccount()
-        statusMessage = "Connexion réussie. \(tradingAccounts.count) compte(s) bourse détecté(s)."
+        statusMessage = "Connexion réussie. \(tradingAccounts.count) compte(s) d’investissement détecté(s)."
     }
 
     @MainActor
@@ -352,7 +353,7 @@ struct BoursoBankSettingsView: View {
 
     @MainActor
     private func synchronize() async {
-        guard let client, let account = selectedAccount, let portfolio = selectedPortfolio else { return }
+        guard let client, let selectedAccount, let portfolio = selectedPortfolio else { return }
         guard await BoursoBankSyncGate.shared.acquire() else {
             errorMessage = BoursoBankError.synchronizationAlreadyRunning.localizedDescription
             return
@@ -363,6 +364,15 @@ struct BoursoBankSettingsView: View {
         statusMessage = nil
         defer { isWorking = false }
         do {
+            let refreshedAccounts = try await client.tradingAccounts()
+            tradingAccounts = refreshedAccounts
+            guard let account = refreshedAccounts.first(where: { $0.id == selectedAccount.id })
+                    ?? refreshedAccounts.first(where: {
+                        $0.kind == selectedAccount.kind
+                            && $0.name.caseInsensitiveCompare(selectedAccount.name) == .orderedSame
+                    })
+            else { throw BoursoBankError.noTradingAccount }
+            selectedAccountID = account.id
             let snapshot = try await client.snapshot(for: account)
             let result = try await BoursoBankImporter.synchronize(
                 snapshot: snapshot,
@@ -372,7 +382,7 @@ struct BoursoBankSettingsView: View {
             )
             UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncPreferenceKey)
             let symbolWarning = result.unresolvedSymbols > 0
-                ? " · \(result.unresolvedSymbols) symbole(s) conservé(s) sous forme d’ISIN"
+                ? " · \(result.unresolvedSymbols) support(s) sans cours public rapproché"
                 : ""
             statusMessage = "\(result.positions) positions synchronisées · \(result.created) ajoutées · \(result.updated) mises à jour · \(result.removed) clôturées\(symbolWarning)."
             await marketData.refresh(

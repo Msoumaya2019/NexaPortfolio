@@ -24,6 +24,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - connexion non officielle BoursoBank en lecture seule avec validation forte, synchronisation des positions, quantités, PRU, cours et liquidités du PEA ou du compte-titres ;
 - conservation chiffrée de la session BoursoBank dans le Trousseau iOS pour une synchronisation silencieuse au lancement et au retour dans l’application ;
 - compatibilité avec l’identifiant réel des PEA BoursoBank et le format actuel de l’endpoint de synthèse (correctif 2.0.1) ;
+- synchronisation BoursoBank des contrats d’assurance-vie : solde actualisé et supports détaillés lorsqu’ils sont fournis par la page du contrat ;
 - avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
 - avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;
@@ -123,7 +124,7 @@ Le fichier est traité localement sur l’iPhone et aucun numéro de téléphone
 
 Dans **Réglages > BoursoBank**, saisis l’identifiant client et le mot de passe, puis valide la demande depuis l’application officielle BoursoBank si elle apparaît. Le mot de passe reste uniquement en mémoire pendant l’authentification et n’est jamais enregistré. L’identifiant, si l’option est activée, et les cookies de la session authentifiée sont conservés dans le Trousseau iOS avec une protection limitée à l’appareil déverrouillé.
 
-Choisis ensuite le PEA ou le compte-titres et crée de préférence un portefeuille BoursoBank séparé. La synchronisation récupère l’état courant : positions, quantités, prix de revient moyen, dernier cours et liquidités. Elle ne reconstruit pas l’historique complet des achats, ventes et dividendes passés. Les relevés BoursoBank restent nécessaires pour cet historique.
+Choisis ensuite le PEA, le compte-titres ou l’assurance-vie et crée de préférence un portefeuille BoursoBank séparé. La synchronisation récupère l’état courant : positions ou supports, quantités, prix de revient moyen, dernier cours et liquidités. Pour une assurance-vie dont BoursoBank ne fournit pas le détail exploitable, Nexa crée un support global afin de reporter au minimum le solde actualisé du contrat. Elle ne reconstruit pas l’historique complet des achats, ventes et dividendes passés. Les relevés BoursoBank restent nécessaires pour cet historique.
 
 Lorsque **Synchronisation silencieuse** est active, Nexa essaie d’actualiser le compte au lancement et à chaque retour au premier plan, avec un intervalle minimal de quinze minutes. Il ne s’agit pas d’une exécution serveur permanente : iOS ne garantit pas les tâches en arrière-plan et BoursoBank peut expirer la session ou demander une nouvelle validation forte.
 

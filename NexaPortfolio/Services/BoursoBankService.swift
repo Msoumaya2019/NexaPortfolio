@@ -38,7 +38,7 @@ enum BoursoBankError: LocalizedError {
         case .notAuthenticated:
             return "La session BoursoBank n’est pas authentifiée. Reconnecte le compte."
         case .noTradingAccount:
-            return "Aucun PEA ou compte-titres BoursoBank n’a été détecté."
+            return "Aucun PEA, compte-titres ou contrat d’assurance-vie BoursoBank n’a été détecté."
         case .sessionExpired:
             return "La session BoursoBank a expiré. Reconnecte le compte puis relance la synchronisation."
         case .synchronizationAlreadyRunning:
@@ -155,12 +155,26 @@ struct BoursoBankMFAChallenge: Sendable {
     let token: String
 }
 
+enum BoursoBankInvestmentAccountKind: String, Hashable, Sendable {
+    case securities
+    case lifeInsurance
+
+    var displayName: String {
+        switch self {
+        case .securities: "PEA ou compte-titres"
+        case .lifeInsurance: "Assurance-vie"
+        }
+    }
+}
+
 struct BoursoBankTradingAccount: Identifiable, Hashable, Sendable {
     let id: String
     let alternateID: String?
     let name: String
     let displayedBalance: Double
     let bankName: String
+    let kind: BoursoBankInvestmentAccountKind
+    let detailPath: String
 }
 
 struct BoursoBankSummaryValue: Decodable, Sendable {
@@ -170,6 +184,12 @@ struct BoursoBankSummaryValue: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case value, decimals, currency
+    }
+
+    init(value: Double, decimals: Int = 2, currency: String? = "EUR") {
+        self.value = value
+        self.decimals = decimals
+        self.currency = currency
     }
 
     init(from decoder: Decoder) throws {
@@ -220,6 +240,28 @@ struct BoursoBankPosition: Decodable, Sendable {
         case variation = "var"
         case gainLoss, gainLossPercent, lastMovementDate
     }
+
+    init(
+        symbol: String,
+        label: String,
+        quantity: Double,
+        buyingPrice: Double,
+        amount: Double,
+        last: Double,
+        currency: String = "EUR"
+    ) {
+        self.symbol = symbol
+        self.label = label
+        permalink = nil
+        self.quantity = BoursoBankSummaryValue(value: quantity, decimals: 6, currency: nil)
+        self.buyingPrice = BoursoBankSummaryValue(value: buyingPrice, decimals: 6, currency: currency)
+        self.amount = BoursoBankSummaryValue(value: amount, currency: currency)
+        self.last = BoursoBankSummaryValue(value: last, decimals: 6, currency: currency)
+        variation = nil
+        gainLoss = nil
+        gainLossPercent = nil
+        lastMovementDate = nil
+    }
 }
 
 struct BoursoBankAccountSummary: Decodable, Sendable {
@@ -230,6 +272,24 @@ struct BoursoBankAccountSummary: Decodable, Sendable {
     let total: BoursoBankSummaryValue?
     let gainLoss: BoursoBankSummaryValue?
     let gainLossPercent: BoursoBankSummaryValue?
+
+    init(
+        name: String?,
+        currency: String?,
+        cash: BoursoBankSummaryValue?,
+        valuation: BoursoBankSummaryValue?,
+        total: BoursoBankSummaryValue?,
+        gainLoss: BoursoBankSummaryValue? = nil,
+        gainLossPercent: BoursoBankSummaryValue? = nil
+    ) {
+        self.name = name
+        self.currency = currency
+        self.cash = cash
+        self.valuation = valuation
+        self.total = total
+        self.gainLoss = gainLoss
+        self.gainLossPercent = gainLossPercent
+    }
 }
 
 struct BoursoBankTradingSummaryItem: Decodable, Sendable {
@@ -539,6 +599,9 @@ actor BoursoBankClient {
 
     func snapshot(for account: BoursoBankTradingAccount) async throws -> BoursoBankSnapshot {
         guard authenticated else { throw BoursoBankError.notAuthenticated }
+        if account.kind == .lifeInsurance {
+            return try await lifeInsuranceSnapshot(for: account)
+        }
         guard Self.isHexAccountID(account.id),
               let configuration = webConfiguration,
               let userHash = configuration.userHash,
@@ -595,6 +658,70 @@ actor BoursoBankClient {
         )
         try persistSession()
         return snapshot
+    }
+
+    private func lifeInsuranceSnapshot(for account: BoursoBankTradingAccount) async throws -> BoursoBankSnapshot {
+        guard account.detailPath.hasPrefix("/compte/assurance-vie/"),
+              let url = URL(string: account.detailPath, relativeTo: baseURL)?.absoluteURL,
+              url.scheme == "https",
+              url.host?.lowercased() == "clients.boursobank.com"
+        else { throw BoursoBankError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+        request.setValue(
+            baseURL.appendingPathComponent("dashboard/liste-comptes").absoluteString,
+            forHTTPHeaderField: "Referer"
+        )
+        let (data, response) = try await performFollowingClientRedirects(request)
+        if response.statusCode == 401 || response.statusCode == 403 {
+            authenticated = false
+            try? BoursoBankSessionKeychain.delete()
+            throw BoursoBankError.sessionExpired
+        }
+        guard (200...299).contains(response.statusCode)
+                || response.statusCode == 404
+                || response.statusCode == 503
+        else {
+            throw BoursoBankError.server(response.statusCode)
+        }
+
+        // BoursoBank renvoie parfois 404/503 pour la page détaillée d'un contrat
+        // pourtant présent dans la liste des comptes. Le solde de la liste reste
+        // alors utilisable et permet une synchronisation globale du contrat.
+        let page = (200...299).contains(response.statusCode) ? Self.text(from: data) : ""
+        let responsePath = response.url?.path.lowercased() ?? ""
+        if responsePath.hasPrefix("/connexion")
+            || responsePath.hasPrefix("/securisation")
+            || page.contains("form[clientNumber]") {
+            authenticated = false
+            try? BoursoBankSessionKeychain.delete()
+            throw BoursoBankError.sessionExpired
+        }
+
+        let balance = Self.extractLifeInsuranceBalance(from: page) ?? account.displayedBalance
+        var positions = Self.extractLifeInsurancePositions(from: page)
+        if positions.isEmpty, balance > 0 {
+            positions = [BoursoBankPosition(
+                symbol: Self.stableInsuranceSymbol(for: account.name),
+                label: account.name,
+                quantity: 1,
+                buyingPrice: balance,
+                amount: balance,
+                last: balance
+            )]
+        }
+        let valuation = positions.reduce(0) { $0 + $1.amount.value }
+        let total = balance > 0 ? balance : valuation
+        let summary = BoursoBankAccountSummary(
+            name: account.name,
+            currency: "EUR",
+            cash: BoursoBankSummaryValue(value: max(0, total - valuation)),
+            valuation: BoursoBankSummaryValue(value: valuation),
+            total: BoursoBankSummaryValue(value: total)
+        )
+        try persistSession()
+        return BoursoBankSnapshot(account: account, summary: summary, positions: positions)
     }
 
     func instrumentQuote(for symbol: String) async throws -> BoursoBankInstrumentQuote {
@@ -712,6 +839,28 @@ actor BoursoBankClient {
         }
         captureCookies(from: http, url: url)
         return (data, http)
+    }
+
+    private func performFollowingClientRedirects(
+        _ originalRequest: URLRequest,
+        maximumRedirects: Int = 4
+    ) async throws -> (Data, HTTPURLResponse) {
+        var request = originalRequest
+        for _ in 0...maximumRedirects {
+            let result = try await perform(request)
+            guard (300...399).contains(result.1.statusCode),
+                  let location = result.1.value(forHTTPHeaderField: "Location")
+            else { return result }
+            guard let currentURL = request.url,
+                  let nextURL = URL(string: location, relativeTo: currentURL)?.absoluteURL,
+                  nextURL.scheme == "https",
+                  nextURL.host?.lowercased() == "clients.boursobank.com"
+            else { throw BoursoBankError.invalidURL }
+            request = URLRequest(url: nextURL)
+            request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+            request.setValue(currentURL.absoluteString, forHTTPHeaderField: "Referer")
+        }
+        throw BoursoBankError.invalidResponse
     }
 
     private func captureCookies(from response: HTTPURLResponse, url: URL) {
@@ -833,7 +982,7 @@ actor BoursoBankClient {
               let sectionEnd = page.range(of: "</ul>", range: sectionStart.upperBound..<page.endIndex)
         else {
             if page.contains("Mes placements financiers") { return [] }
-            throw BoursoBankError.incompatiblePage("liste des comptes-titres absente")
+            throw BoursoBankError.incompatiblePage("liste des comptes d’investissement absente")
         }
         let section = String(page[sectionStart.lowerBound..<sectionEnd.upperBound])
         let accountLinks = section.captures(
@@ -856,26 +1005,170 @@ actor BoursoBankClient {
                     options: [.dotMatchesLineSeparators]
                   )
             else { return nil }
+            let detailPath = groups[0].decodingHTMLEntities
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let kind: BoursoBankInvestmentAccountKind = detailPath
+                .lowercased()
+                .hasPrefix("/compte/assurance-vie/") ? .lifeInsurance : .securities
             let alternateID = groups[1].firstCapture(for: #"data-account-label="([a-fA-F0-9]{32})""#)
             return BoursoBankTradingAccount(
                 id: linkID.lowercased(),
                 alternateID: alternateID?.lowercased(),
                 name: name.strippingHTML,
                 displayedBalance: parseFrenchAmount(balance.strippingHTML),
-                bankName: bankName.strippingHTML
+                bankName: bankName.strippingHTML,
+                kind: kind,
+                detailPath: detailPath
             )
         }
     }
 
+    private static func extractLifeInsuranceBalance(from page: String) -> Double? {
+        let structuredPatterns = [
+            #"<(?:h4|span)\b[^>]*>.*?Solde\s+au.*?</(?:h4|span)>\s*<(?:h3|span)\b[^>]*>(.*?)</(?:h3|span)>"#,
+            #"Solde\s+au[^<]*</[^>]+>\s*<[^>]+>(.*?)</[^>]+>"#
+        ]
+        for pattern in structuredPatterns {
+            if let amount = page.firstCapture(
+                for: pattern,
+                options: [.caseInsensitive, .dotMatchesLineSeparators]
+            ) {
+                let value = parseFrenchAmount(amount.strippingHTML)
+                if value > 0 { return value }
+            }
+        }
+
+        guard let balanceRange = page.strippingHTML.range(
+            of: "Solde au",
+            options: [.caseInsensitive, .diacriticInsensitive]
+        ) else { return nil }
+        let suffix = String(page.strippingHTML[balanceRange.upperBound...].prefix(160))
+        guard let amount = suffix.firstCapture(for: #"([−-]?[0-9][0-9\s.,]*?)\s*€"#) else {
+            return nil
+        }
+        let value = parseFrenchAmount(amount)
+        return value > 0 ? value : nil
+    }
+
+    private static func extractLifeInsurancePositions(from page: String) -> [BoursoBankPosition] {
+        var positionsBySymbol: [String: BoursoBankPosition] = [:]
+        let tables = page.captures(
+            for: #"<table\b[^>]*>(.*?)</table>"#,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]
+        )
+        for tableGroups in tables where !tableGroups.isEmpty {
+            let table = tableGroups[0]
+            let headers = table.captures(
+                for: #"<th\b[^>]*>(.*?)</th>"#,
+                options: [.caseInsensitive, .dotMatchesLineSeparators]
+            ).compactMap(\.first).map { normalizedColumnName($0) }
+            let labelIndex = headers.firstIndex(where: { $0.contains("SUPPORT") || $0 == "FONDS" })
+                ?? headers.firstIndex(where: { $0 == "VALEUR" })
+            guard let labelIndex,
+                  let amountIndex = headers.firstIndex(where: { $0.contains("MONTANT") })
+            else { continue }
+
+            let quantityIndex = headers.firstIndex(where: { $0.contains("QUANTITE") })
+            let currentPriceIndex = headers.firstIndex(where: {
+                $0 == "COURS" || $0.contains("VALEUR DE LA PART") || $0.contains("VALEUR LIQUIDATIVE")
+            })
+            let buyingPriceIndex = headers.firstIndex(where: {
+                $0.contains("PX. REVIENT") || $0.contains("PRIX DE REVIENT")
+            })
+            let rows = table.captures(
+                for: #"<tr\b[^>]*>(.*?)</tr>"#,
+                options: [.caseInsensitive, .dotMatchesLineSeparators]
+            )
+            for rowGroups in rows where !rowGroups.isEmpty {
+                let row = rowGroups[0]
+                let cells = row.captures(
+                    for: #"<td\b[^>]*>(.*?)</td>"#,
+                    options: [.caseInsensitive, .dotMatchesLineSeparators]
+                ).compactMap(\.first)
+                guard cells.indices.contains(labelIndex), cells.indices.contains(amountIndex) else { continue }
+
+                let amount = parseFrenchAmount(cells[amountIndex].strippingHTML)
+                guard amount > 0 else { continue }
+                let rowText = row.strippingHTML.uppercased()
+                let isin = rowText.firstCapture(for: #"\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b"#)
+                var label = cells[labelIndex].strippingHTML
+                if let isin { label = label.replacingOccurrences(of: isin, with: "") }
+                label = label.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+                if label.isEmpty { label = isin ?? "Support assurance-vie" }
+
+                let parsedQuantity = value(at: quantityIndex, in: cells)
+                let quantity = parsedQuantity > 0 ? parsedQuantity : 1
+                let parsedCurrentPrice = value(at: currentPriceIndex, in: cells)
+                let currentPrice = parsedCurrentPrice > 0 ? parsedCurrentPrice : amount / quantity
+                let parsedBuyingPrice = value(at: buyingPriceIndex, in: cells)
+                let buyingPrice = parsedBuyingPrice > 0 ? parsedBuyingPrice : currentPrice
+                let symbol = isin ?? stableInsuranceSymbol(for: label)
+
+                if let existing = positionsBySymbol[symbol] {
+                    let combinedQuantity = existing.quantity.value + quantity
+                    let combinedAmount = existing.amount.value + amount
+                    let combinedCost = combinedQuantity > 0
+                        ? ((existing.buyingPrice.value * existing.quantity.value) + (buyingPrice * quantity)) / combinedQuantity
+                        : buyingPrice
+                    positionsBySymbol[symbol] = BoursoBankPosition(
+                        symbol: symbol,
+                        label: label,
+                        quantity: combinedQuantity,
+                        buyingPrice: combinedCost,
+                        amount: combinedAmount,
+                        last: combinedQuantity > 0 ? combinedAmount / combinedQuantity : currentPrice
+                    )
+                } else {
+                    positionsBySymbol[symbol] = BoursoBankPosition(
+                        symbol: symbol,
+                        label: label,
+                        quantity: quantity,
+                        buyingPrice: buyingPrice,
+                        amount: amount,
+                        last: currentPrice
+                    )
+                }
+            }
+        }
+        return positionsBySymbol.values.sorted {
+            $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+        }
+    }
+
+    private static func value(at index: Int?, in cells: [String]) -> Double {
+        guard let index, cells.indices.contains(index) else { return 0 }
+        return parseFrenchAmount(cells[index].strippingHTML)
+    }
+
+    private static func normalizedColumnName(_ value: String) -> String {
+        value.strippingHTML
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "fr_FR"))
+            .uppercased()
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func stableInsuranceSymbol(for label: String) -> String {
+        let digest = SHA256.hash(data: Data(label.lowercased().utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "AV-\(digest.prefix(20))"
+    }
+
     private static func parseFrenchAmount(_ value: String) -> Double {
-        var normalized = value
+        let decoded = value.decodingHTMLEntities
+            .replacingOccurrences(of: "−", with: "-")
+        guard let numericValue = decoded.firstCapture(for: #"(-?[0-9][0-9\s.,]*)"#) else {
+            return 0
+        }
+        var normalized = numericValue
             .replacingOccurrences(of: "\u{00A0}", with: "")
             .replacingOccurrences(of: "\u{202F}", with: "")
             .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: "€", with: "")
-            .replacingOccurrences(of: "−", with: "-")
-        if normalized.contains(",") {
+        if normalized.contains(","), normalized.contains(".") {
             normalized = normalized.replacingOccurrences(of: ".", with: "")
+            normalized = normalized.replacingOccurrences(of: ",", with: ".")
+        } else if normalized.contains(",") {
             normalized = normalized.replacingOccurrences(of: ",", with: ".")
         }
         return Double(normalized) ?? 0
@@ -968,6 +1261,15 @@ private extension String {
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&nbsp;", with: "\u{00A0}")
+            .replacingOccurrences(of: "&eacute;", with: "é")
+            .replacingOccurrences(of: "&Eacute;", with: "É")
+            .replacingOccurrences(of: "&egrave;", with: "è")
+            .replacingOccurrences(of: "&ecirc;", with: "ê")
+            .replacingOccurrences(of: "&agrave;", with: "à")
+            .replacingOccurrences(of: "&acirc;", with: "â")
+            .replacingOccurrences(of: "&ocirc;", with: "ô")
+            .replacingOccurrences(of: "&ucirc;", with: "û")
+            .replacingOccurrences(of: "&ccedil;", with: "ç")
             .replacingOccurrences(of: "&amp;", with: "&")
     }
 
@@ -1100,8 +1402,15 @@ enum BoursoBankImporter {
         await withTaskGroup(of: ResolvedBoursoBankPosition?.self) { group in
             for position in positions where position.quantity.value > 0 {
                 group.addTask {
-                    let quote = try? await client.instrumentQuote(for: position.symbol)
-                    let isin = quote?.isin?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let directISIN = isLikelyISIN(position.symbol) ? position.symbol.uppercased() : nil
+                    let quote: BoursoBankInstrumentQuote?
+                    if directISIN == nil, !position.symbol.hasPrefix("AV-") {
+                        quote = try? await client.instrumentQuote(for: position.symbol)
+                    } else {
+                        quote = nil
+                    }
+                    let isin = directISIN
+                        ?? quote?.isin?.trimmingCharacters(in: .whitespacesAndNewlines)
                     let searchResults: [SymbolSearchResult]
                     if let isin, !isin.isEmpty {
                         searchResults = (try? await MarketDataClient.shared.search(isin)) ?? []
@@ -1140,5 +1449,9 @@ enum BoursoBankImporter {
             }
             return values.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
         }
+    }
+
+    nonisolated private static func isLikelyISIN(_ value: String) -> Bool {
+        value.range(of: #"^[A-Z]{2}[A-Z0-9]{9}[0-9]$"#, options: .regularExpression) != nil
     }
 }
