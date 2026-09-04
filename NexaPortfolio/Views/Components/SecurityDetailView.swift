@@ -177,7 +177,7 @@ struct SecurityDetailView: View {
                 }
             }
 
-            Divider().overlay(Color.white.opacity(0.08))
+            Divider().overlay(AppTheme.border)
 
             HStack {
                 Link("Source : Alpha Vantage", destination: URL(string: "https://www.alphavantage.co/")!)
@@ -464,7 +464,7 @@ struct SecurityDetailView: View {
                         .foregroundStyle(AppTheme.accent)
                 }
 
-                Divider().overlay(Color.white.opacity(0.08))
+                Divider().overlay(AppTheme.border)
 
                 HStack(alignment: .top, spacing: 16) {
                     dividendMetric(

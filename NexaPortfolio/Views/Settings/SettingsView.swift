@@ -9,6 +9,7 @@ struct SettingsView: View {
 
     @AppStorage("hideBalances") private var hideBalances = false
     @AppStorage("refreshOnLaunch") private var refreshOnLaunch = true
+    @AppStorage("appearance.mode") private var appearanceRawValue = AppAppearance.dark.rawValue
 
     var body: some View {
         ZStack {
@@ -16,6 +17,13 @@ struct SettingsView: View {
 
             List {
                 Section("Affichage") {
+                    Picker("Apparence", selection: $appearanceRawValue) {
+                        ForEach(AppAppearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
                     Toggle(isOn: $hideBalances) {
                         Label("Masquer les montants", systemImage: "eye.slash")
                     }
@@ -107,7 +115,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "2.3.0")
+                    LabeledContent("Version", value: "2.4.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

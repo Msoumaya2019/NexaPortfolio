@@ -40,7 +40,7 @@ struct WatchlistsView: View {
                                     itemRow(item)
                                         .padding(.vertical, 10)
                                     if item.id != watchlist.items.sorted(by: { $0.symbol < $1.symbol }).last?.id {
-                                        Divider().overlay(Color.white.opacity(0.06))
+                                        Divider().overlay(AppTheme.border)
                                     }
                                 }
                             }

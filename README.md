@@ -5,7 +5,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 ## Fonctions incluses
 
 - plusieurs portefeuilles et listes de suivi ;
-- toutes les positions réunies dans l’écran Aperçu, avec tri par valeur détenue, symbole, rendement du dividende, croissance totale ou croissance sur 24 heures ;
+- toutes les positions réunies dans l’écran Aperçu, avec tri par valeur détenue, symbole ou rendement du dividende ;
+- évolution de la valeur globale et de chaque portefeuille sur 24 heures, une semaine, un mois, trois mois, six mois ou depuis le début ;
 - achats, ventes et dividendes avec historique ;
 - calcul du prix moyen, de la valeur et des gains/pertes ;
 - conversion indicative des devises vers la devise du portefeuille ;
@@ -15,7 +16,7 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - dividendes sur douze mois, rendement en pourcentage, dernier versement et revenu annuel estimé pour chaque titre ;
 - prochaine date de détachement affichée dans la fiche de chaque action, avec une estimation fondée sur la cadence récente lorsqu’aucune date annoncée n’est disponible ;
 - estimation du montant du prochain dividende selon le nombre d’actions détenues et la devise du portefeuille ;
-- onglet Dividendes réunissant les prochains dividendes estimés de toutes les positions, classés par date chronologique ;
+- onglet Dividendes réunissant les prochains dividendes estimés de toutes les positions, classés par date et regroupés par mois avec leurs totaux prévus ;
 - synthèse des dividendes propre à chaque portefeuille ;
 - correction manuelle du prix moyen ou de la valeur totale d’achat de chaque position ;
 - connexion Trading 212 Démo ou Réel en lecture seule, avec clés conservées dans le trousseau iOS ;
@@ -32,7 +33,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
 - export texte/CSV via la feuille de partage iOS ;
-- interface sombre en français et icône originale.
+- interface en français et icône originale ;
+- modes jour et nuit sélectionnables dans les réglages, avec mémorisation du choix.
 
 ## Prérequis
 

@@ -41,7 +41,7 @@ struct SecuritySearchView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(result.symbol)
                                         .font(.headline)
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(AppTheme.primaryText)
                                     Text(result.displayName)
                                         .font(.subheadline)
                                         .foregroundStyle(AppTheme.secondaryText)

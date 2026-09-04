@@ -22,6 +22,11 @@ enum MarketDataError: LocalizedError {
     }
 }
 
+struct PortfolioPerformanceSnapshot: Sendable, Equatable {
+    let amount: Double
+    let percent: Double
+}
+
 actor MarketDataClient {
     static let shared = MarketDataClient()
 
@@ -163,6 +168,55 @@ actor MarketDataClient {
         return values
     }
 
+    func historicalClose(for rawSymbol: String, around targetDate: Date) async throws -> Double {
+        let symbol = rawSymbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let calendar = Calendar(identifier: .gregorian)
+        let periodStart = calendar.date(byAdding: .day, value: -10, to: targetDate) ?? targetDate
+        let requestedEnd = calendar.date(byAdding: .day, value: 10, to: targetDate) ?? .now
+        let latestEnd = calendar.date(byAdding: .day, value: 1, to: .now) ?? .now
+        let periodEnd = min(requestedEnd, latestEnd)
+
+        guard let encoded = symbol.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              var components = URLComponents(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(encoded)")
+        else { throw MarketDataError.invalidURL }
+
+        components.queryItems = [
+            URLQueryItem(name: "period1", value: String(Int(periodStart.timeIntervalSince1970))),
+            URLQueryItem(name: "period2", value: String(Int(periodEnd.timeIntervalSince1970))),
+            URLQueryItem(name: "interval", value: "1d"),
+            URLQueryItem(name: "includePrePost", value: "false")
+        ]
+        guard let url = components.url else { throw MarketDataError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 NexaPortfolio/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 15
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw MarketDataError.invalidResponse
+        }
+
+        let payload = try decoder.decode(YahooChartResponse.self, from: data)
+        if let message = payload.chart.error?.description {
+            throw MarketDataError.server(message)
+        }
+        guard let result = payload.chart.result?.first,
+              let timestamps = result.timestamp,
+              let closes = result.indicators.quote.first?.close
+        else { throw MarketDataError.quoteUnavailable(symbol) }
+
+        let targetTimestamp = targetDate.timeIntervalSince1970
+        let candidates = zip(timestamps, closes).compactMap { pair -> (distance: Double, price: Double)? in
+            guard let close = pair.1, close > 0 else { return nil }
+            return (abs(TimeInterval(pair.0) - targetTimestamp), close)
+        }
+        guard let closest = candidates.min(by: { $0.distance < $1.distance }) else {
+            throw MarketDataError.quoteUnavailable(symbol)
+        }
+        return closest.price
+    }
+
     func search(_ query: String) async throws -> [SymbolSearchResult] {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.count >= 1,
@@ -277,6 +331,56 @@ final class MarketDataStore: ObservableObject {
         isRefreshing = false
     }
 
+    func performance(
+        holdings: [Holding],
+        cashBalance: Double,
+        since date: Date
+    ) async -> PortfolioPerformanceSnapshot? {
+        let positions = holdings.filter { $0.quantity > 0 }
+        guard !positions.isEmpty else {
+            return PortfolioPerformanceSnapshot(amount: 0, percent: 0)
+        }
+
+        let symbols = Array(Set(positions.map { $0.symbol.uppercased() }))
+        let historicalPrices = await withTaskGroup(
+            of: (String, Double)?.self,
+            returning: [String: Double].self
+        ) { group in
+            for symbol in symbols {
+                group.addTask {
+                    guard let price = try? await MarketDataClient.shared.historicalClose(
+                        for: symbol,
+                        around: date
+                    ) else { return nil }
+                    return (symbol, price)
+                }
+            }
+
+            var prices: [String: Double] = [:]
+            for await result in group {
+                if let result { prices[result.0] = result.1 }
+            }
+            return prices
+        }
+
+        var currentValue = cashBalance
+        var startingValue = cashBalance
+        var matchedPositionCount = 0
+        for holding in positions {
+            guard let historicalPrice = historicalPrices[holding.symbol.uppercased()] else { continue }
+            currentValue += holding.marketValueInPortfolioCurrency
+            startingValue += historicalPrice * holding.quantity * holding.fxRateToPortfolioCurrency
+            matchedPositionCount += 1
+        }
+
+        guard matchedPositionCount > 0, startingValue > 0 else { return nil }
+        let amount = currentValue - startingValue
+        return PortfolioPerformanceSnapshot(
+            amount: amount,
+            percent: amount / startingValue * 100
+        )
+    }
+
     func search(_ query: String) async throws -> [SymbolSearchResult] {
         try await client.search(query)
     }
@@ -296,6 +400,7 @@ private struct YahooChartResponse: Decodable {
 
     struct Result: Decodable {
         let meta: Meta
+        let timestamp: [Int]?
         let indicators: Indicators
         let events: Events?
     }

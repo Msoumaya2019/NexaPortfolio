@@ -1,14 +1,144 @@
 import SwiftUI
+import UIKit
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: "Jour"
+        case .dark: "Nuit"
+        }
+    }
+
+    var colorScheme: ColorScheme {
+        switch self {
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
+
+enum PortfolioPerformancePeriod: String, CaseIterable, Identifiable {
+    case sinceInception
+    case sixMonths
+    case threeMonths
+    case oneMonth
+    case oneWeek
+    case oneDay
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .sinceInception: "Depuis le début"
+        case .sixMonths: "6 mois"
+        case .threeMonths: "3 mois"
+        case .oneMonth: "1 mois"
+        case .oneWeek: "1 semaine"
+        case .oneDay: "24 h"
+        }
+    }
+
+    var metricTitle: String {
+        switch self {
+        case .sinceInception: "Depuis le début"
+        default: title
+        }
+    }
+
+    var startDate: Date? {
+        let calendar = Calendar.current
+        switch self {
+        case .sinceInception, .oneDay:
+            return nil
+        case .sixMonths:
+            return calendar.date(byAdding: .month, value: -6, to: .now)
+        case .threeMonths:
+            return calendar.date(byAdding: .month, value: -3, to: .now)
+        case .oneMonth:
+            return calendar.date(byAdding: .month, value: -1, to: .now)
+        case .oneWeek:
+            return calendar.date(byAdding: .day, value: -7, to: .now)
+        }
+    }
+}
+
+struct PerformancePeriodMenu: View {
+    @Binding var selection: String
+
+    private var selectedPeriod: PortfolioPerformancePeriod {
+        PortfolioPerformancePeriod(rawValue: selection) ?? .oneDay
+    }
+
+    var body: some View {
+        Menu {
+            Picker("Période", selection: $selection) {
+                ForEach(PortfolioPerformancePeriod.allCases) { period in
+                    Text(period.title).tag(period.rawValue)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(selectedPeriod.title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(AppTheme.accentBlue)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(AppTheme.accentBlue.opacity(0.10), in: Capsule())
+        }
+        .accessibilityLabel("Choisir la période de performance")
+    }
+}
 
 enum AppTheme {
-    static let background = Color(red: 0.035, green: 0.055, blue: 0.095)
-    static let card = Color(red: 0.07, green: 0.095, blue: 0.15)
-    static let raisedCard = Color(red: 0.095, green: 0.125, blue: 0.19)
-    static let accent = Color(red: 0.31, green: 0.85, blue: 0.72)
-    static let accentBlue = Color(red: 0.32, green: 0.60, blue: 1.0)
-    static let positive = Color(red: 0.28, green: 0.86, blue: 0.57)
-    static let negative = Color(red: 1.0, green: 0.38, blue: 0.42)
-    static let secondaryText = Color.white.opacity(0.62)
+    static let background = adaptive(
+        light: UIColor(red: 0.955, green: 0.970, blue: 0.985, alpha: 1),
+        dark: UIColor(red: 0.035, green: 0.055, blue: 0.095, alpha: 1)
+    )
+    static let card = adaptive(
+        light: .white,
+        dark: UIColor(red: 0.07, green: 0.095, blue: 0.15, alpha: 1)
+    )
+    static let raisedCard = adaptive(
+        light: UIColor(red: 0.925, green: 0.945, blue: 0.970, alpha: 1),
+        dark: UIColor(red: 0.095, green: 0.125, blue: 0.19, alpha: 1)
+    )
+    static let heroStart = adaptive(
+        light: UIColor(red: 0.82, green: 0.96, blue: 0.92, alpha: 1),
+        dark: UIColor(red: 0.10, green: 0.25, blue: 0.31, alpha: 1)
+    )
+    static let accent = adaptive(
+        light: UIColor(red: 0.02, green: 0.53, blue: 0.40, alpha: 1),
+        dark: UIColor(red: 0.31, green: 0.85, blue: 0.72, alpha: 1)
+    )
+    static let accentBlue = adaptive(
+        light: UIColor(red: 0.12, green: 0.40, blue: 0.86, alpha: 1),
+        dark: UIColor(red: 0.32, green: 0.60, blue: 1.0, alpha: 1)
+    )
+    static let positive = adaptive(
+        light: UIColor(red: 0.03, green: 0.50, blue: 0.28, alpha: 1),
+        dark: UIColor(red: 0.28, green: 0.86, blue: 0.57, alpha: 1)
+    )
+    static let negative = adaptive(
+        light: UIColor(red: 0.82, green: 0.12, blue: 0.18, alpha: 1),
+        dark: UIColor(red: 1.0, green: 0.38, blue: 0.42, alpha: 1)
+    )
+    static let primaryText = adaptive(light: .black, dark: .white)
+    static let secondaryText = adaptive(
+        light: UIColor.black.withAlphaComponent(0.58),
+        dark: UIColor.white.withAlphaComponent(0.62)
+    )
+    static let border = adaptive(
+        light: UIColor.black.withAlphaComponent(0.08),
+        dark: UIColor.white.withAlphaComponent(0.06)
+    )
 
     static let allocationColors: [Color] = [
         accent,
@@ -18,6 +148,12 @@ enum AppTheme {
         Color(red: 0.95, green: 0.36, blue: 0.72),
         Color(red: 0.34, green: 0.78, blue: 0.98)
     ]
+
+    private static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        })
+    }
 }
 
 struct CardModifier: ViewModifier {
@@ -27,7 +163,7 @@ struct CardModifier: ViewModifier {
             .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    .stroke(AppTheme.border, lineWidth: 1)
             }
     }
 }
@@ -70,7 +206,7 @@ struct DividendBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
-            (yieldPercent > 0 ? AppTheme.accent : Color.white).opacity(0.09),
+            (yieldPercent > 0 ? AppTheme.accent : AppTheme.secondaryText).opacity(0.09),
             in: Capsule()
         )
     }

@@ -24,6 +24,31 @@ private struct UpcomingDividend: Identifiable {
     }
 }
 
+private struct MonthlyDividendTotal: Identifiable {
+    let currencyCode: String
+    let amount: Double
+
+    var id: String { currencyCode }
+}
+
+private struct DividendMonthSection: Identifiable {
+    let monthStart: Date
+    let dividends: [UpcomingDividend]
+
+    var id: Date { monthStart }
+
+    var totals: [MonthlyDividendTotal] {
+        Dictionary(grouping: dividends, by: \.portfolioCurrencyCode)
+            .map { currencyCode, dividends in
+                MonthlyDividendTotal(
+                    currencyCode: currencyCode,
+                    amount: dividends.reduce(0) { $0 + $1.estimatedAmount }
+                )
+            }
+            .sorted { $0.currencyCode < $1.currencyCode }
+    }
+}
+
 struct DividendsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var marketData: MarketDataStore
@@ -50,6 +75,19 @@ struct DividendsView: View {
         }
     }
 
+    private var monthSections: [DividendMonthSection] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: upcomingDividends) { dividend in
+            calendar.date(
+                from: calendar.dateComponents([.year, .month], from: dividend.date)
+            ) ?? calendar.startOfDay(for: dividend.date)
+        }
+        return grouped.keys.sorted().compactMap { monthStart in
+            guard let dividends = grouped[monthStart] else { return nil }
+            return DividendMonthSection(monthStart: monthStart, dividends: dividends)
+        }
+    }
+
     var body: some View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
@@ -66,8 +104,11 @@ struct DividendsView: View {
                         )
                         .appCard()
                     } else {
-                        ForEach(upcomingDividends) { dividend in
-                            dividendCard(dividend)
+                        ForEach(monthSections) { section in
+                            monthHeader(section)
+                            ForEach(section.dividends) { dividend in
+                                dividendCard(dividend)
+                            }
                         }
                     }
 
@@ -134,6 +175,33 @@ struct DividendsView: View {
             Spacer()
         }
         .appCard()
+    }
+
+    private func monthHeader(_ section: DividendMonthSection) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(section.monthStart.formatted(.dateTime.month(.wide).year()).capitalized)
+                    .font(.title3.weight(.bold))
+                Text("\(section.dividends.count) dividende\(section.dividends.count > 1 ? "s" : "") prévu\(section.dividends.count > 1 ? "s" : "")")
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("Total prévu")
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.secondaryText)
+                ForEach(section.totals) { total in
+                    Text(hideBalances ? "••••" : total.amount.currency(total.currencyCode))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(AppTheme.positive)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.top, 10)
     }
 
     private func dividendCard(_ dividend: UpcomingDividend) -> some View {

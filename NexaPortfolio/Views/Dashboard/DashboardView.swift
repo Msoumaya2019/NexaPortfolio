@@ -6,8 +6,6 @@ private enum DashboardPositionSort: String, CaseIterable, Identifiable {
     case value
     case alphabetical
     case dividendYield
-    case totalGrowth
-    case dailyGrowth
 
     var id: String { rawValue }
 
@@ -16,8 +14,6 @@ private enum DashboardPositionSort: String, CaseIterable, Identifiable {
         case .value: "Valeur détenue"
         case .alphabetical: "Ordre alphabétique"
         case .dividendYield: "Dividende le plus élevé"
-        case .totalGrowth: "Croissance totale"
-        case .dailyGrowth: "Croissance sur 24 h"
         }
     }
 }
@@ -38,8 +34,11 @@ struct DashboardView: View {
     @AppStorage("trading212.autoSync") private var trading212AutoSync = true
     @AppStorage("boursobank.autoSync") private var boursoBankAutoSync = true
     @AppStorage("dashboard.positionSort") private var positionSortRawValue = DashboardPositionSort.value.rawValue
+    @AppStorage("portfolio.performancePeriod") private var performancePeriodRawValue = PortfolioPerformancePeriod.oneDay.rawValue
     @State private var trading212SyncInProgress = false
     @State private var boursoBankSyncInProgress = false
+    @State private var historicalPerformance: PortfolioPerformanceSnapshot?
+    @State private var isLoadingPerformance = false
 
     private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
     private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
@@ -54,9 +53,25 @@ struct DashboardView: View {
     private var dailyGainPercent: Double {
         let previousValue = holdings.reduce(0) {
             $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
-        }
+        } + portfolios.reduce(0) { $0 + $1.cashBalance }
         guard previousValue > 0 else { return 0 }
         return dailyGain / previousValue * 100
+    }
+
+    private var selectedPerformancePeriod: PortfolioPerformancePeriod {
+        PortfolioPerformancePeriod(rawValue: performancePeriodRawValue) ?? .oneDay
+    }
+
+    private var displayedPerformance: PortfolioPerformanceSnapshot? {
+        switch selectedPerformancePeriod {
+        case .sinceInception:
+            guard totalCost > 0 else { return PortfolioPerformanceSnapshot(amount: 0, percent: 0) }
+            return PortfolioPerformanceSnapshot(amount: totalGain, percent: totalGain / totalCost * 100)
+        case .oneDay:
+            return PortfolioPerformanceSnapshot(amount: dailyGain, percent: dailyGainPercent)
+        case .sixMonths, .threeMonths, .oneMonth, .oneWeek:
+            return historicalPerformance
+        }
     }
 
     private var estimatedAnnualDividendIncome: Double {
@@ -90,14 +105,6 @@ struct DashboardView: View {
                 }
                 if lhs.estimatedAnnualDividendIncome != rhs.estimatedAnnualDividendIncome {
                     return lhs.estimatedAnnualDividendIncome > rhs.estimatedAnnualDividendIncome
-                }
-            case .totalGrowth:
-                if lhs.unrealizedGainPercent != rhs.unrealizedGainPercent {
-                    return lhs.unrealizedGainPercent > rhs.unrealizedGainPercent
-                }
-            case .dailyGrowth:
-                if lhs.dailyChangePercent != rhs.dailyChangePercent {
-                    return lhs.dailyChangePercent > rhs.dailyChangePercent
                 }
             }
             return lhs.id.uuidString < rhs.id.uuidString
@@ -150,6 +157,9 @@ struct DashboardView: View {
                 await refreshQuotes()
             }
         }
+        .task(id: performancePeriodRawValue) {
+            await loadSelectedPerformance()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             Task {
@@ -158,6 +168,7 @@ struct DashboardView: View {
                 if refreshOnLaunch, marketDataIsStale {
                     await refreshQuotes()
                 }
+                await loadSelectedPerformance()
             }
         }
         .toolbar {
@@ -282,7 +293,7 @@ struct DashboardView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(AppTheme.secondaryText)
                 Spacer()
-                ChangeBadge(value: dailyGainPercent)
+                performanceSelection
             }
 
             Text(hideBalances ? "••••••" : totalValue.currency(primaryCurrency))
@@ -290,7 +301,15 @@ struct DashboardView: View {
                 .contentTransition(.numericText())
 
             HStack(spacing: 24) {
-                metric(title: "Aujourd’hui", value: dailyGain, color: dailyGain >= 0 ? AppTheme.positive : AppTheme.negative)
+                if let displayedPerformance {
+                    metric(
+                        title: selectedPerformancePeriod.metricTitle,
+                        value: displayedPerformance.amount,
+                        color: displayedPerformance.amount >= 0 ? AppTheme.positive : AppTheme.negative
+                    )
+                } else {
+                    unavailablePerformanceMetric
+                }
                 metric(title: "Non réalisé", value: totalGain, color: totalGain >= 0 ? AppTheme.positive : AppTheme.negative)
             }
         }
@@ -299,7 +318,7 @@ struct DashboardView: View {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color(red: 0.10, green: 0.25, blue: 0.31), AppTheme.card],
+                        colors: [AppTheme.heroStart, AppTheme.card],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -327,6 +346,37 @@ struct DashboardView: View {
             Text(hideBalances ? "••••" : value.currency(primaryCurrency))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(color)
+        }
+    }
+
+    private var performanceSelection: some View {
+        HStack(spacing: 6) {
+            if isLoadingPerformance {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 62)
+            } else if let displayedPerformance {
+                ChangeBadge(value: displayedPerformance.percent)
+            } else {
+                Text("—")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.secondaryText.opacity(0.09), in: Capsule())
+            }
+            PerformancePeriodMenu(selection: $performancePeriodRawValue)
+        }
+    }
+
+    private var unavailablePerformanceMetric: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(selectedPerformancePeriod.metricTitle)
+                .font(.caption)
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(isLoadingPerformance ? "Calcul…" : "Indisponible")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(AppTheme.secondaryText)
         }
     }
 
@@ -533,5 +583,23 @@ struct DashboardView: View {
 
     private func refreshQuotes() async {
         await marketData.refresh(holdings: holdings, watchlistItems: watchlistItems, context: modelContext)
+        await loadSelectedPerformance()
+    }
+
+    @MainActor
+    private func loadSelectedPerformance() async {
+        guard let startDate = selectedPerformancePeriod.startDate else {
+            historicalPerformance = nil
+            isLoadingPerformance = false
+            return
+        }
+
+        isLoadingPerformance = true
+        defer { isLoadingPerformance = false }
+        historicalPerformance = await marketData.performance(
+            holdings: holdings,
+            cashBalance: portfolios.reduce(0) { $0 + $1.cashBalance },
+            since: startDate
+        )
     }
 }

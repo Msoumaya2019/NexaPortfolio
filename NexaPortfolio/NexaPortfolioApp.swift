@@ -20,12 +20,17 @@ struct NexaPortfolioApp: App {
     }()
 
     @StateObject private var marketData = MarketDataStore()
+    @AppStorage("appearance.mode") private var appearanceRawValue = AppAppearance.dark.rawValue
+
+    private var appearance: AppAppearance {
+        AppAppearance(rawValue: appearanceRawValue) ?? .dark
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(marketData)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(appearance.colorScheme)
         }
         .modelContainer(modelContainer)
     }

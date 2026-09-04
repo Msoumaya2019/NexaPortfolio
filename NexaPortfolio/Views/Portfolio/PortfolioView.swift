@@ -3,17 +3,29 @@ import SwiftData
 
 struct PortfolioView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var marketData: MarketDataStore
     @Query(sort: \Portfolio.createdAt) private var portfolios: [Portfolio]
 
+    @AppStorage("portfolio.performancePeriod") private var performancePeriodRawValue = PortfolioPerformancePeriod.oneDay.rawValue
     @State private var selectedPortfolioID: UUID?
     @State private var showingAddTrade = false
     @State private var showingNewPortfolio = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
     @State private var editingHolding: Holding?
+    @State private var historicalPerformance: PortfolioPerformanceSnapshot?
+    @State private var isLoadingPerformance = false
 
     private var selectedPortfolio: Portfolio? {
         portfolios.first { $0.id == selectedPortfolioID } ?? portfolios.first
+    }
+
+    private var selectedPerformancePeriod: PortfolioPerformancePeriod {
+        PortfolioPerformancePeriod(rawValue: performancePeriodRawValue) ?? .oneDay
+    }
+
+    private var performanceTaskID: String {
+        "\(selectedPortfolio?.id.uuidString ?? "aucun")-\(performancePeriodRawValue)"
     }
 
     var body: some View {
@@ -73,6 +85,9 @@ struct PortfolioView: View {
         }
         .task {
             if selectedPortfolioID == nil { selectedPortfolioID = portfolios.first?.id }
+        }
+        .task(id: performanceTaskID) {
+            await loadSelectedPortfolioPerformance()
         }
         .onChange(of: portfolios.count) {
             if selectedPortfolio == nil { selectedPortfolioID = portfolios.first?.id }
@@ -146,7 +161,7 @@ struct PortfolioView: View {
 
     private func summaryCard(_ portfolio: Portfolio) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Valeur actuelle")
                         .font(.caption)
@@ -155,10 +170,10 @@ struct PortfolioView: View {
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                 }
                 Spacer()
-                ChangeBadge(value: portfolio.unrealizedGainPercent)
+                performanceSelection(for: portfolio)
             }
 
-            Divider().overlay(Color.white.opacity(0.08))
+            Divider().overlay(AppTheme.border)
 
             HStack {
                 summaryMetric("Investi", portfolio.costBasis.currency(portfolio.currencyCode))
@@ -175,7 +190,7 @@ struct PortfolioView: View {
         .appCard()
     }
 
-    private func summaryMetric(_ title: String, _ value: String, color: Color = .white) -> some View {
+    private func summaryMetric(_ title: String, _ value: String, color: Color = AppTheme.primaryText) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption2)
@@ -186,6 +201,66 @@ struct PortfolioView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+    }
+
+    private func displayedPerformance(for portfolio: Portfolio) -> PortfolioPerformanceSnapshot? {
+        switch selectedPerformancePeriod {
+        case .sinceInception:
+            return PortfolioPerformanceSnapshot(
+                amount: portfolio.unrealizedGain,
+                percent: portfolio.unrealizedGainPercent
+            )
+        case .oneDay:
+            let previousValue = portfolio.cashBalance + portfolio.holdings.reduce(0) {
+                $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
+            }
+            guard previousValue > 0 else {
+                return PortfolioPerformanceSnapshot(amount: 0, percent: 0)
+            }
+            let amount = portfolio.totalValue - previousValue
+            return PortfolioPerformanceSnapshot(amount: amount, percent: amount / previousValue * 100)
+        case .sixMonths, .threeMonths, .oneMonth, .oneWeek:
+            return historicalPerformance
+        }
+    }
+
+    private func performanceSelection(for portfolio: Portfolio) -> some View {
+        HStack(spacing: 6) {
+            if isLoadingPerformance {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 62)
+            } else if let performance = displayedPerformance(for: portfolio) {
+                ChangeBadge(value: performance.percent)
+            } else {
+                Text("—")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.secondaryText.opacity(0.09), in: Capsule())
+            }
+            PerformancePeriodMenu(selection: $performancePeriodRawValue)
+        }
+    }
+
+    @MainActor
+    private func loadSelectedPortfolioPerformance() async {
+        guard let portfolio = selectedPortfolio,
+              let startDate = selectedPerformancePeriod.startDate
+        else {
+            historicalPerformance = nil
+            isLoadingPerformance = false
+            return
+        }
+
+        isLoadingPerformance = true
+        defer { isLoadingPerformance = false }
+        historicalPerformance = await marketData.performance(
+            holdings: portfolio.holdings,
+            cashBalance: portfolio.cashBalance,
+            since: startDate
+        )
     }
 
     private func portfolioDividendCard(_ portfolio: Portfolio) -> some View {
@@ -230,7 +305,7 @@ struct PortfolioView: View {
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
             } else {
-                Divider().overlay(Color.white.opacity(0.06))
+                Divider().overlay(AppTheme.border)
 
                 ForEach(dividendHoldings.prefix(4)) { holding in
                     HStack {
@@ -273,7 +348,7 @@ struct PortfolioView: View {
                 ForEach(portfolio.holdings.sorted { $0.marketValue > $1.marketValue }) { holding in
                     holdingRow(holding)
                     if holding.id != portfolio.holdings.sorted(by: { $0.marketValue > $1.marketValue }).last?.id {
-                        Divider().overlay(Color.white.opacity(0.06))
+                        Divider().overlay(AppTheme.border)
                     }
                 }
             }
