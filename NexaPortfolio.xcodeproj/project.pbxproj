@@ -37,6 +37,7 @@
 		10000000000000000000001C /* BoursoBankService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11000000000000000000001D /* BoursoBankService.swift */; };
 		10000000000000000000001D /* BoursoBankSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11000000000000000000001E /* BoursoBankSettingsView.swift */; };
 		10000000000000000000001E /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = 11000000000000000000001F /* ThirdPartyNotices.txt */; };
+		10000000000000000000001F /* DividendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110000000000000000000020 /* DividendsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +72,7 @@
 		11000000000000000000001D /* BoursoBankService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoursoBankService.swift; sourceTree = "<group>"; };
 		11000000000000000000001E /* BoursoBankSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoursoBankSettingsView.swift; sourceTree = "<group>"; };
 		11000000000000000000001F /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
+		110000000000000000000020 /* DividendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DividendsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,6 +139,7 @@
 				120000000000000000000006 /* Components */,
 				120000000000000000000007 /* Dashboard */,
 				12000000000000000000000A /* Portfolio */,
+				12000000000000000000000D /* Dividends */,
 				12000000000000000000000B /* Watchlists */,
 				12000000000000000000000C /* Settings */,
 			);
@@ -199,6 +202,14 @@
 				11000000000000000000001E /* BoursoBankSettingsView.swift */,
 			);
 			path = Settings;
+			sourceTree = "<group>";
+		};
+		12000000000000000000000D /* Dividends */ = {
+			isa = PBXGroup;
+			children = (
+				110000000000000000000020 /* DividendsView.swift */,
+			);
+			path = Dividends;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -300,6 +311,7 @@
 				10000000000000000000001B /* RevolutSettingsView.swift in Sources */,
 				10000000000000000000001C /* BoursoBankService.swift in Sources */,
 				10000000000000000000001D /* BoursoBankSettingsView.swift in Sources */,
+				10000000000000000000001F /* DividendsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -425,7 +437,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -435,7 +447,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.msoumaya2019.nexaportfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -453,7 +465,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -463,7 +475,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.msoumaya2019.nexaportfolio;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

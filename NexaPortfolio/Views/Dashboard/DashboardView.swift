@@ -6,6 +6,8 @@ private enum DashboardPositionSort: String, CaseIterable, Identifiable {
     case value
     case alphabetical
     case dividendYield
+    case totalGrowth
+    case dailyGrowth
 
     var id: String { rawValue }
 
@@ -14,6 +16,8 @@ private enum DashboardPositionSort: String, CaseIterable, Identifiable {
         case .value: "Valeur détenue"
         case .alphabetical: "Ordre alphabétique"
         case .dividendYield: "Dividende le plus élevé"
+        case .totalGrowth: "Croissance totale"
+        case .dailyGrowth: "Croissance sur 24 h"
         }
     }
 }
@@ -86,6 +90,14 @@ struct DashboardView: View {
                 }
                 if lhs.estimatedAnnualDividendIncome != rhs.estimatedAnnualDividendIncome {
                     return lhs.estimatedAnnualDividendIncome > rhs.estimatedAnnualDividendIncome
+                }
+            case .totalGrowth:
+                if lhs.unrealizedGainPercent != rhs.unrealizedGainPercent {
+                    return lhs.unrealizedGainPercent > rhs.unrealizedGainPercent
+                }
+            case .dailyGrowth:
+                if lhs.dailyChangePercent != rhs.dailyChangePercent {
+                    return lhs.dailyChangePercent > rhs.dailyChangePercent
                 }
             }
             return lhs.id.uuidString < rhs.id.uuidString
@@ -405,9 +417,13 @@ struct DashboardView: View {
                                 )
                         )
                             .font(.subheadline.weight(.semibold))
-                        Text(holding.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(holding.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                        HStack(spacing: 7) {
+                            Text("Total \(holding.unrealizedGainPercent / 100, format: .percent.precision(.fractionLength(2)))")
+                                .foregroundStyle(holding.unrealizedGainPercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                            Text("24 h \(holding.dailyChangePercent / 100, format: .percent.precision(.fractionLength(2)))")
+                                .foregroundStyle(holding.dailyChangePercent >= 0 ? AppTheme.positive : AppTheme.negative)
+                        }
+                        .font(.caption2.weight(.semibold))
                         if holding.dividendYieldPercent > 0 {
                             Text("Div. \(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2))) · \(hideBalances ? "••••/an" : holding.estimatedAnnualDividendIncome.currency(holding.portfolio?.currencyCode ?? primaryCurrency) + "/an")")
                                 .font(.caption2.weight(.semibold))

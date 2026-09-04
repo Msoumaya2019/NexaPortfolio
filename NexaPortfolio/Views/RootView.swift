@@ -18,6 +18,11 @@ struct RootView: View {
             .tabItem { Label("Portefeuille", systemImage: "briefcase.fill") }
 
             NavigationStack {
+                DividendsView()
+            }
+            .tabItem { Label("Dividendes", systemImage: "banknote.fill") }
+
+            NavigationStack {
                 WatchlistsView()
             }
             .tabItem { Label("Suivi", systemImage: "star.fill") }
