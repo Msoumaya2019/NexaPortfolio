@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Charts
 
 private enum DividendHistoryPeriod: String, CaseIterable, Identifiable {
     case oneMonth
@@ -55,6 +56,30 @@ private struct DividendCurrencyTotal: Identifiable {
     let amount: Double
 
     var id: String { currencyCode }
+}
+
+private struct DividendChartPoint: Identifiable {
+    let month: Date
+    let amount: Double
+    let series: String
+
+    var id: String {
+        "\(Int(month.timeIntervalSince1970))-\(series)"
+    }
+}
+
+private struct DividendChartSection: Identifiable {
+    let currencyCode: String
+    let points: [DividendChartPoint]
+    let currentTotal: Double
+    let previousTotal: Double
+
+    var id: String { currencyCode }
+
+    var changePercent: Double? {
+        guard previousTotal != 0 else { return nil }
+        return (currentTotal - previousTotal) / abs(previousTotal) * 100
+    }
 }
 
 private struct DividendMonthSection: Identifiable {
@@ -117,6 +142,65 @@ struct DividendsView: View {
         Array(recordedDividendTransactions.filter { $0.grossAmount > 0 }.prefix(10))
     }
 
+    private var dividendChartSections: [DividendChartSection] {
+        let calendar = Calendar.current
+        let now = Date.now
+        guard let currentMonth = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now)
+        ) else { return [] }
+
+        let months = (0..<12).compactMap { offset in
+            calendar.date(byAdding: .month, value: offset - 11, to: currentMonth)
+        }
+        let currencies = Set(recordedDividendTransactions.map { $0.currencyCode.uppercased() })
+
+        return currencies.sorted().map { currencyCode in
+            var points: [DividendChartPoint] = []
+            var currentTotal = 0.0
+            var previousTotal = 0.0
+
+            for month in months {
+                let currentAmount = recordedAmount(
+                    currencyCode: currencyCode,
+                    month: month,
+                    upperBound: month == currentMonth ? now : nil
+                )
+                let previousMonth = calendar.date(byAdding: .year, value: -1, to: month) ?? month
+                let previousUpperBound = month == currentMonth
+                    ? calendar.date(byAdding: .year, value: -1, to: now)
+                    : nil
+                let previousAmount = recordedAmount(
+                    currencyCode: currencyCode,
+                    month: previousMonth,
+                    upperBound: previousUpperBound
+                )
+
+                currentTotal += currentAmount
+                previousTotal += previousAmount
+                points.append(DividendChartPoint(
+                    month: month,
+                    amount: currentAmount,
+                    series: "12 mois récents"
+                ))
+                points.append(DividendChartPoint(
+                    month: month,
+                    amount: previousAmount,
+                    series: "N-1"
+                ))
+            }
+
+            return DividendChartSection(
+                currencyCode: currencyCode,
+                points: points,
+                currentTotal: currentTotal,
+                previousTotal: previousTotal
+            )
+        }
+        .filter { section in
+            section.points.contains { point in point.amount != 0 }
+        }
+    }
+
     private var upcomingDividends: [UpcomingDividend] {
         let startOfToday = Calendar.current.startOfDay(for: .now)
         return holdings.compactMap { holding in
@@ -154,6 +238,13 @@ struct DividendsView: View {
             ScrollView {
                 LazyVStack(spacing: 14) {
                     receivedSummaryCard
+                    if dividendChartSections.isEmpty {
+                        emptyDividendChartCard
+                    } else {
+                        ForEach(dividendChartSections) { section in
+                            dividendChartCard(section)
+                        }
+                    }
                     recentReceivedCard
                     introductionCard
 
@@ -320,6 +411,122 @@ struct DividendsView: View {
             }
         }
         .appCard()
+    }
+
+    private var emptyDividendChartCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Évolution mensuelle", systemImage: "chart.bar.xaxis")
+                .font(.headline)
+            Text("Le graphique apparaîtra après l’enregistrement ou l’import de dividendes.")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .appCard()
+    }
+
+    private func dividendChartCard(_ section: DividendChartSection) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label("Évolution mensuelle", systemImage: "chart.bar.xaxis")
+                        .font(.headline)
+                    Text("12 derniers mois comparés à N-1 · \(section.currencyCode)")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+                Spacer()
+                if let changePercent = section.changePercent {
+                    ChangeBadge(value: changePercent)
+                } else {
+                    Text("N-1 indisponible")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+
+            HStack(spacing: 22) {
+                chartTotal(
+                    title: "12 mois récents",
+                    amount: section.currentTotal,
+                    currencyCode: section.currencyCode,
+                    color: AppTheme.accent
+                )
+                chartTotal(
+                    title: "N-1",
+                    amount: section.previousTotal,
+                    currencyCode: section.currencyCode,
+                    color: AppTheme.accentBlue
+                )
+            }
+
+            if hideBalances {
+                Label("Graphique masqué", systemImage: "eye.slash")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: 190)
+                    .background(AppTheme.raisedCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Chart(section.points) { point in
+                    BarMark(
+                        x: .value("Mois", point.month, unit: .month),
+                        y: .value("Dividendes", point.amount)
+                    )
+                    .position(by: .value("Période", point.series))
+                    .foregroundStyle(by: .value("Période", point.series))
+                    .cornerRadius(3)
+                }
+                .chartForegroundStyleScale([
+                    "12 mois récents": AppTheme.accent,
+                    "N-1": AppTheme.accentBlue
+                ])
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month, count: 2)) { value in
+                        AxisGridLine().foregroundStyle(AppTheme.border)
+                        AxisTick().foregroundStyle(AppTheme.secondaryText)
+                        AxisValueLabel(format: .dateTime.month(.narrow))
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { value in
+                        AxisGridLine().foregroundStyle(AppTheme.border)
+                        AxisValueLabel()
+                    }
+                }
+                .chartLegend(position: .bottom, alignment: .leading, spacing: 10)
+                .frame(height: 220)
+                .accessibilityLabel("Dividendes mensuels des douze derniers mois comparés à l’année précédente en \(section.currencyCode)")
+            }
+
+            Text("Le mois en cours est comparé à la même période du mois correspondant de N-1.")
+                .font(.caption2)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .appCard()
+    }
+
+    private func chartTotal(title: String, amount: Double, currencyCode: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(hideBalances ? "••••" : amount.currency(currencyCode))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(color)
+        }
+    }
+
+    private func recordedAmount(currencyCode: String, month: Date, upperBound: Date?) -> Double {
+        let calendar = Calendar.current
+        guard let end = calendar.date(byAdding: .month, value: 1, to: month) else { return 0 }
+        return recordedDividendTransactions.reduce(0) { total, transaction in
+            guard transaction.currencyCode.uppercased() == currencyCode,
+                  transaction.date >= month,
+                  transaction.date < end,
+                  upperBound.map({ transaction.date <= $0 }) ?? true
+            else { return total }
+            return total + transaction.grossAmount - transaction.fees
+        }
     }
 
     private func receivedDividendRow(_ transaction: TradeTransaction) -> some View {
