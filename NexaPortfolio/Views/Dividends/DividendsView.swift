@@ -1,6 +1,32 @@
 import SwiftUI
 import SwiftData
 
+private enum DividendHistoryPeriod: String, CaseIterable, Identifiable {
+    case oneMonth
+    case sixMonths
+    case twelveMonths
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .oneMonth: "1 mois"
+        case .sixMonths: "6 mois"
+        case .twelveMonths: "12 mois"
+        }
+    }
+
+    var startDate: Date {
+        let months: Int
+        switch self {
+        case .oneMonth: months = -1
+        case .sixMonths: months = -6
+        case .twelveMonths: months = -12
+        }
+        return Calendar.current.date(byAdding: .month, value: months, to: .now) ?? .distantPast
+    }
+}
+
 private struct UpcomingDividend: Identifiable {
     let holding: Holding
     let date: Date
@@ -24,7 +50,7 @@ private struct UpcomingDividend: Identifiable {
     }
 }
 
-private struct MonthlyDividendTotal: Identifiable {
+private struct DividendCurrencyTotal: Identifiable {
     let currencyCode: String
     let amount: Double
 
@@ -37,10 +63,10 @@ private struct DividendMonthSection: Identifiable {
 
     var id: Date { monthStart }
 
-    var totals: [MonthlyDividendTotal] {
+    var totals: [DividendCurrencyTotal] {
         Dictionary(grouping: dividends, by: \.portfolioCurrencyCode)
             .map { currencyCode, dividends in
-                MonthlyDividendTotal(
+                DividendCurrencyTotal(
                     currencyCode: currencyCode,
                     amount: dividends.reduce(0) { $0 + $1.estimatedAmount }
                 )
@@ -55,8 +81,41 @@ struct DividendsView: View {
 
     @Query(sort: \Holding.symbol) private var holdings: [Holding]
     @Query(sort: \WatchlistItem.addedAt) private var watchlistItems: [WatchlistItem]
+    @Query(sort: \TradeTransaction.date, order: .reverse) private var transactions: [TradeTransaction]
 
     @AppStorage("hideBalances") private var hideBalances = false
+    @AppStorage("dividends.historyPeriod") private var historyPeriodRawValue = DividendHistoryPeriod.sixMonths.rawValue
+
+    private var historyPeriod: DividendHistoryPeriod {
+        DividendHistoryPeriod(rawValue: historyPeriodRawValue) ?? .sixMonths
+    }
+
+    private var recordedDividendTransactions: [TradeTransaction] {
+        transactions.filter { $0.kind == .dividend && $0.date <= .now && $0.grossAmount != 0 }
+    }
+
+    private var transactionsInSelectedPeriod: [TradeTransaction] {
+        recordedDividendTransactions.filter { $0.date >= historyPeriod.startDate }
+    }
+
+    private var receivedPaymentCount: Int {
+        transactionsInSelectedPeriod.filter { $0.grossAmount > 0 }.count
+    }
+
+    private var receivedTotals: [DividendCurrencyTotal] {
+        Dictionary(grouping: transactionsInSelectedPeriod, by: \.currencyCode)
+            .map { currencyCode, transactions in
+                DividendCurrencyTotal(
+                    currencyCode: currencyCode,
+                    amount: transactions.reduce(0) { $0 + $1.grossAmount - $1.fees }
+                )
+            }
+            .sorted { $0.currencyCode < $1.currencyCode }
+    }
+
+    private var recentReceivedDividends: [TradeTransaction] {
+        Array(recordedDividendTransactions.filter { $0.grossAmount > 0 }.prefix(10))
+    }
 
     private var upcomingDividends: [UpcomingDividend] {
         let startOfToday = Calendar.current.startOfDay(for: .now)
@@ -94,6 +153,8 @@ struct DividendsView: View {
 
             ScrollView {
                 LazyVStack(spacing: 14) {
+                    receivedSummaryCard
+                    recentReceivedCard
                     introductionCard
 
                     if upcomingDividends.isEmpty {
@@ -175,6 +236,119 @@ struct DividendsView: View {
             Spacer()
         }
         .appCard()
+    }
+
+    private var receivedSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Dividendes reçus", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                Spacer()
+                Text("Période glissante")
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            Picker("Période des dividendes reçus", selection: $historyPeriodRawValue) {
+                ForEach(DividendHistoryPeriod.allCases) { period in
+                    Text(period.title).tag(period.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if receivedTotals.isEmpty {
+                Text("Aucun dividende enregistré sur cette période.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.vertical, 6)
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(receivedTotals) { total in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Montant reçu")
+                                .font(.caption)
+                                .foregroundStyle(AppTheme.secondaryText)
+                            Spacer()
+                            Text(hideBalances ? "••••" : total.amount.currency(total.currencyCode))
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(total.amount >= 0 ? AppTheme.positive : AppTheme.negative)
+                        }
+                    }
+                }
+
+                HStack {
+                    Label(
+                        "\(receivedPaymentCount) versement\(receivedPaymentCount > 1 ? "s" : "")",
+                        systemImage: "banknote"
+                    )
+                    Spacer()
+                    Text(historyPeriod.title)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(AppTheme.secondaryText)
+            }
+
+            Text("Les annulations, retenues ou corrections fiscales enregistrées comme dividendes sont déduites du total.")
+                .font(.caption2)
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        .appCard()
+    }
+
+    private var recentReceivedCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("10 derniers dividendes reçus")
+                    .font(.headline)
+                Spacer()
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(AppTheme.accent)
+            }
+
+            if recentReceivedDividends.isEmpty {
+                Text("Aucun dividende reçu n’est encore enregistré.")
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.vertical, 6)
+            } else {
+                ForEach(Array(recentReceivedDividends.enumerated()), id: \.element.id) { index, transaction in
+                    receivedDividendRow(transaction)
+                    if index < recentReceivedDividends.count - 1 {
+                        Divider().overlay(AppTheme.border)
+                    }
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private func receivedDividendRow(_ transaction: TradeTransaction) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "banknote.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.positive)
+                .frame(width: 38, height: 38)
+                .background(AppTheme.positive.opacity(0.10), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(transaction.symbol)
+                    .font(.subheadline.weight(.bold))
+                Text(transaction.displayName)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+                Text("\(transaction.date.formatted(.dateTime.day().month(.abbreviated).year())) · \(transaction.portfolio?.name ?? "Portefeuille")")
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(hideBalances ? "••••" : (transaction.grossAmount - transaction.fees).currency(transaction.currencyCode))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(AppTheme.positive)
+        }
     }
 
     private func monthHeader(_ section: DividendMonthSection) -> some View {
