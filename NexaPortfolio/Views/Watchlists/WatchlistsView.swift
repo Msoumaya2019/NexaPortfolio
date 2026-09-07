@@ -1,6 +1,14 @@
 import SwiftUI
 import SwiftData
 
+private enum WatchArea: String, CaseIterable, Identifiable {
+    case lists
+    case opportunities
+
+    var id: String { rawValue }
+    var title: String { self == .lists ? "Mes listes" : "Opportunités" }
+}
+
 struct WatchlistsView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var marketData: MarketDataStore
@@ -13,6 +21,7 @@ struct WatchlistsView: View {
     @State private var showingNewList = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
+    @State private var selectedArea: WatchArea = .lists
 
     private var selectedWatchlist: Watchlist? {
         watchlists.first { $0.id == selectedWatchlistID } ?? watchlists.first
@@ -22,7 +31,9 @@ struct WatchlistsView: View {
         ZStack {
             AppTheme.background.ignoresSafeArea()
 
-            if let watchlist = selectedWatchlist {
+            if selectedArea == .opportunities {
+                OpportunitiesView()
+            } else if let watchlist = selectedWatchlist {
                 ScrollView {
                     LazyVStack(spacing: 18) {
                         listSelector(watchlist)
@@ -65,34 +76,49 @@ struct WatchlistsView: View {
                 )
             }
         }
-        .navigationTitle("Listes de suivi")
+        .navigationTitle("Suivi")
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Rubrique", selection: $selectedArea) {
+                ForEach(WatchArea.allCases) { area in
+                    Text(area.title).tag(area)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        showingNewList = true
-                    } label: {
-                        Label("Nouvelle liste", systemImage: "folder.badge.plus")
-                    }
+                if selectedArea == .lists {
+                    Menu {
+                        Button {
+                            showingNewList = true
+                        } label: {
+                            Label("Nouvelle liste", systemImage: "folder.badge.plus")
+                        }
 
-                    Button(role: .destructive) {
-                        showingDeleteConfirmation = true
+                        Button(role: .destructive) {
+                            showingDeleteConfirmation = true
+                        } label: {
+                            Label("Supprimer cette liste", systemImage: "trash")
+                        }
+                        .disabled(watchlists.count <= 1)
                     } label: {
-                        Label("Supprimer cette liste", systemImage: "trash")
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .disabled(watchlists.count <= 1)
-                } label: {
-                    Image(systemName: "ellipsis.circle")
                 }
             }
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingAddItem = true
-                } label: {
-                    Image(systemName: "plus")
+                if selectedArea == .lists {
+                    Button {
+                        showingAddItem = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(selectedWatchlist == nil)
+                    .accessibilityLabel("Ajouter à la liste")
                 }
-                .disabled(selectedWatchlist == nil)
-                .accessibilityLabel("Ajouter à la liste")
             }
         }
         .task {

@@ -1,95 +1,53 @@
 import SwiftUI
 
 struct AnalystSettingsView: View {
-    @State private var apiKey = ""
-    @State private var hasStoredKey = false
-    @State private var isTesting = false
-    @State private var statusMessage: String?
+    @State private var enteredKeys: [AnalystProvider: String] = [:]
+    @State private var storedProviders = Set<AnalystProvider>()
+    @State private var testingProvider: AnalystProvider?
+    @State private var statusMessages: [AnalystProvider: String] = [:]
     @State private var errorMessage: String?
 
     var body: some View {
         Form {
-            Section("Avis des analystes — Alpha Vantage") {
-                Label("Objectifs et consensus sourcés", systemImage: "person.3.fill")
+            Section("Sources indépendantes") {
+                Label("Plusieurs fournisseurs peuvent fonctionner ensemble", systemImage: "point.3.connected.trianglepath.dotted")
                     .foregroundStyle(AppTheme.positive)
-
-                Text("Cette catégorie affiche uniquement l’objectif moyen et la répartition des recommandations fournis par Alpha Vantage.")
+                Text("Chaque avis conserve son fournisseur et sa date. Nexa ne présente jamais une donnée issue d’une API comme une prédiction de son modèle IA.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
+            }
 
-                Link(
-                    "Créer une clé API Alpha Vantage",
-                    destination: URL(string: "https://www.alphavantage.co/support/#api-key")!
-                )
+            ForEach(AnalystProvider.allCases) { provider in
+                providerSection(provider)
             }
 
             Section("Avis IA — Nexa") {
-                Label("Analyse multifactorielle séparée", systemImage: "sparkles")
+                Label("Synthèse multifactorielle séparée", systemImage: "sparkles")
                     .foregroundStyle(AppTheme.accent)
-
-                Text("Le modèle local de Nexa calcule un score, un niveau de confiance, des points favorables et des risques à partir des indicateurs disponibles. Son avis est affiché dans un bloc différent et n’est jamais attribué à Alpha Vantage.")
+                Text("Le modèle local combine uniquement les indicateurs effectivement reçus, signale son niveau de confiance et sépare les points favorables des risques.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
-
                 Label("Aucune donnée de portefeuille transmise", systemImage: "iphone.gen3.radiowaves.left.and.right")
                     .font(.footnote)
             }
 
-            Section("Clé personnelle") {
-                SecureField("Clé API", text: $apiKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                Button {
-                    saveKey()
-                } label: {
-                    Label("Enregistrer dans le Trousseau iOS", systemImage: "key.fill")
-                }
-                .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                if hasStoredKey {
-                    Label("Clé enregistrée sur cet appareil", systemImage: "checkmark.shield.fill")
-                        .font(.footnote)
-                        .foregroundStyle(AppTheme.positive)
-
-                    Button {
-                        Task { await testKey() }
-                    } label: {
-                        Label("Tester la connexion", systemImage: "network")
-                    }
-                    .disabled(isTesting)
-
-                    Button("Supprimer la clé", role: .destructive) {
-                        deleteKey()
-                    }
-                }
-
-                if isTesting {
-                    ProgressView("Vérification…")
-                }
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(AppTheme.positive)
-                }
-            }
-
             Section("Fonctionnement") {
-                Label("Ouvre une action pour voir les deux avis", systemImage: "rectangle.split.2x1")
-                Text("Les résultats sont conservés pendant 24 heures pour limiter les appels. La formule gratuite du fournisseur impose un quota quotidien et certains titres, notamment des ETF ou marchés secondaires, peuvent ne disposer d’aucun consensus.")
+                Label("Fiches des positions et listes de suivi", systemImage: "rectangle.split.2x1")
+                Label("Rubrique Opportunités à étudier", systemImage: "scope")
+                Text("Les résultats sont conservés pendant 24 heures. Une source indisponible n’empêche pas les autres de s’afficher. Les quotas et la couverture dépendent de chaque formule API.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             }
 
             Section {
-                Text("Les objectifs reflètent l’opinion d’analystes tiers à une date donnée. L’avis IA est une estimation automatisée distincte, qui peut être incomplète ou erronée. Aucun des deux ne garantit une évolution future ni ne constitue un conseil d’achat ou de vente.")
+                Text("Les objectifs reflètent des opinions d’analystes tiers à une date donnée. L’avis IA est une estimation automatisée, potentiellement incomplète ou erronée. Aucun résultat ne garantit une évolution future ni ne constitue un conseil d’achat ou de vente.")
                     .font(.footnote)
                     .foregroundStyle(AppTheme.secondaryText)
             }
         }
-        .navigationTitle("Analystes et IA")
+        .navigationTitle("Sources et avis IA")
         .navigationBarTitleDisplayMode(.inline)
-        .task { refreshStoredKeyStatus() }
+        .task { refreshStoredProviders() }
         .alert("Configuration impossible", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -100,46 +58,99 @@ struct AnalystSettingsView: View {
         }
     }
 
-    private func refreshStoredKeyStatus() {
+    @ViewBuilder
+    private func providerSection(_ provider: AnalystProvider) -> some View {
+        Section(provider.title) {
+            SecureField("Clé API personnelle", text: keyBinding(for: provider))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            Link("Créer ou gérer une clé \(provider.title)", destination: provider.signupURL)
+
+            Button {
+                saveKey(for: provider)
+            } label: {
+                Label("Enregistrer dans le Trousseau iOS", systemImage: "key.fill")
+            }
+            .disabled((enteredKeys[provider] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            if storedProviders.contains(provider) {
+                Label("Clé enregistrée sur cet appareil", systemImage: "checkmark.shield.fill")
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.positive)
+
+                HStack {
+                    Button {
+                        Task { await testKey(for: provider) }
+                    } label: {
+                        Label("Tester", systemImage: "network")
+                    }
+                    .disabled(testingProvider != nil)
+
+                    Spacer()
+
+                    Button("Supprimer", role: .destructive) {
+                        deleteKey(for: provider)
+                    }
+                }
+            }
+
+            if testingProvider == provider { ProgressView("Vérification…") }
+            if let status = statusMessages[provider] {
+                Text(status)
+                    .font(.footnote)
+                    .foregroundStyle(AppTheme.positive)
+            }
+        }
+    }
+
+    private func keyBinding(for provider: AnalystProvider) -> Binding<String> {
+        Binding(
+            get: { enteredKeys[provider] ?? "" },
+            set: { enteredKeys[provider] = $0 }
+        )
+    }
+
+    private func refreshStoredProviders() {
         do {
-            hasStoredKey = try AnalystAPIKeychain.load() != nil
+            storedProviders = Set(try AnalystAPIKeychain.configuredKeys().keys)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func saveKey() {
+    private func saveKey(for provider: AnalystProvider) {
         do {
-            try AnalystAPIKeychain.save(apiKey)
-            apiKey = ""
-            hasStoredKey = true
-            statusMessage = "Clé enregistrée. Tu peux maintenant analyser tes actions."
+            try AnalystAPIKeychain.save(enteredKeys[provider] ?? "", for: provider)
+            enteredKeys[provider] = ""
+            storedProviders.insert(provider)
+            statusMessages[provider] = "Clé enregistrée."
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func testKey() async {
-        isTesting = true
-        statusMessage = nil
-        defer { isTesting = false }
+    private func testKey(for provider: AnalystProvider) async {
+        testingProvider = provider
+        statusMessages[provider] = nil
+        defer { testingProvider = nil }
         do {
-            guard let storedKey = try AnalystAPIKeychain.load() else {
+            guard let key = try AnalystAPIKeychain.load(for: provider) else {
                 throw AnalystDataError.apiMessage("Aucune clé n’est enregistrée.")
             }
-            _ = try await AnalystDataClient.shared.snapshot(for: "IBM", apiKey: storedKey)
-            statusMessage = "Connexion réussie."
+            _ = try await AnalystDataClient.shared.snapshot(for: "AAPL", apiKey: key, provider: provider)
+            statusMessages[provider] = "Connexion réussie."
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "\(provider.title) : \(error.localizedDescription)"
         }
     }
 
-    private func deleteKey() {
+    private func deleteKey(for provider: AnalystProvider) {
         do {
-            try AnalystAPIKeychain.delete()
-            hasStoredKey = false
-            apiKey = ""
-            statusMessage = "Clé supprimée."
+            try AnalystAPIKeychain.delete(for: provider)
+            storedProviders.remove(provider)
+            enteredKeys[provider] = ""
+            statusMessages[provider] = "Clé supprimée."
         } catch {
             errorMessage = error.localizedDescription
         }

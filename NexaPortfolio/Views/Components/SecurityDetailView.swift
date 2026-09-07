@@ -18,10 +18,10 @@ struct SecurityDetailView: View {
     var portfolioCurrencyCode: String? = nil
     var averagePurchasePrice: Double? = nil
 
-    @State private var analystSnapshot: AnalystSnapshot?
+    @State private var analystSnapshots: [AnalystSnapshot] = []
     @State private var isLoadingAnalysis = false
     @State private var analystErrorMessage: String?
-    @State private var hasAnalystAPIKey = false
+    @State private var configuredProviderCount = 0
 
     private var dailyChangePercent: Double {
         guard previousClose > 0 else { return 0 }
@@ -72,18 +72,20 @@ struct SecurityDetailView: View {
 
     @ViewBuilder
     private var analystSection: some View {
-        if let snapshot = analystSnapshot {
-            analystSourceCard(snapshot)
-            localAIAdviceCard(snapshot)
+        if !analystSnapshots.isEmpty {
+            ForEach(analystSnapshots) { snapshot in
+                analystSourceCard(snapshot)
+            }
+            localAIAdviceCard(analystSnapshots)
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 Label("Analyses de l’action", systemImage: "sparkles")
                     .font(.headline)
 
                 if isLoadingAnalysis {
-                    ProgressView("Chargement des données Alpha Vantage…")
-                } else if !hasAnalystAPIKey {
-                    Text("Ajoute ta clé Alpha Vantage gratuite pour afficher séparément l’avis des analystes et l’avis IA.")
+                    ProgressView("Interrogation des sources configurées…")
+                } else if configuredProviderCount == 0 {
+                    Text("Ajoute au moins une clé Twelve Data, Finnhub ou Alpha Vantage pour afficher les avis séparés et la synthèse IA.")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.secondaryText)
 
@@ -116,7 +118,7 @@ struct SecurityDetailView: View {
                 Label("Avis des analystes", systemImage: "person.3.fill")
                     .font(.headline)
                 Spacer()
-                Text("ALPHA VANTAGE")
+                Text(snapshot.provider.badgeTitle)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(AppTheme.accent)
                     .padding(.horizontal, 9)
@@ -177,10 +179,22 @@ struct SecurityDetailView: View {
                 }
             }
 
+            HStack(spacing: 16) {
+                if let pe = snapshot.usablePE, pe > 0 {
+                    analysisValue("PER", pe.formatted(.number.precision(.fractionLength(1))))
+                }
+                if let priceToBook = snapshot.priceToBook, priceToBook > 0 {
+                    analysisValue("Prix/actif", priceToBook.formatted(.number.precision(.fractionLength(1))))
+                }
+                if let peg = snapshot.pegRatio, peg > 0 {
+                    analysisValue("PEG", peg.formatted(.number.precision(.fractionLength(1))))
+                }
+            }
+
             Divider().overlay(AppTheme.border)
 
             HStack {
-                Link("Source : Alpha Vantage", destination: URL(string: "https://www.alphavantage.co/")!)
+                Link("Source : \(snapshot.provider.title)", destination: snapshot.provider.websiteURL)
                     .font(.caption)
                 Spacer()
                 Button {
@@ -192,7 +206,7 @@ struct SecurityDetailView: View {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
-                .disabled(isLoadingAnalysis || !hasAnalystAPIKey)
+                .disabled(isLoadingAnalysis || configuredProviderCount == 0)
                 .accessibilityLabel("Actualiser l’avis des analystes")
             }
 
@@ -209,8 +223,8 @@ struct SecurityDetailView: View {
         .appCard()
     }
 
-    private func localAIAdviceCard(_ snapshot: AnalystSnapshot) -> some View {
-        let advice = snapshot.localAIAssessment(currentPrice: currentPrice)
+    private func localAIAdviceCard(_ snapshots: [AnalystSnapshot]) -> some View {
+        let advice = LocalAIAssessment.make(from: snapshots, currentPrice: currentPrice)
         let adviceColor = advice.score >= 58
             ? AppTheme.positive
             : (advice.score < 43 ? AppTheme.negative : AppTheme.accent)
@@ -254,7 +268,7 @@ struct SecurityDetailView: View {
                 Text("Confiance : \(advice.confidence)")
                     .font(.caption.weight(.semibold))
                 Spacer()
-                Text("Calculé sur l’iPhone")
+                Text("\(snapshots.count) source\(snapshots.count > 1 ? "s" : "") · calculé sur l’iPhone")
                     .font(.caption)
                     .foregroundStyle(AppTheme.secondaryText)
             }
@@ -264,6 +278,17 @@ struct SecurityDetailView: View {
                 .foregroundStyle(AppTheme.secondaryText)
         }
         .appCard()
+    }
+
+    private func analysisValue(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(value)
+                .font(.subheadline.weight(.bold))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func analystMetric(_ title: String, _ value: Int, color: Color) -> some View {
@@ -297,17 +322,20 @@ struct SecurityDetailView: View {
     @MainActor
     private func loadAnalystSnapshot(forceRefresh: Bool) async {
         do {
-            let apiKey = try AnalystAPIKeychain.load()
-            hasAnalystAPIKey = apiKey != nil
+            let keys = try AnalystAPIKeychain.configuredKeys()
+            configuredProviderCount = keys.count
 
-            if !forceRefresh, let cached = AnalystSnapshotCache.load(symbol: symbol) {
-                analystSnapshot = cached
-                analystErrorMessage = nil
-                return
+            if !forceRefresh {
+                let cached = AnalystSnapshotCache.loadAll(symbol: symbol)
+                if !cached.isEmpty {
+                    analystSnapshots = cached
+                    analystErrorMessage = nil
+                    return
+                }
             }
 
-            guard let apiKey else {
-                analystSnapshot = AnalystSnapshotCache.load(symbol: symbol, allowExpired: true)
+            guard !keys.isEmpty else {
+                analystSnapshots = AnalystSnapshotCache.loadAll(symbol: symbol, allowExpired: true)
                 analystErrorMessage = nil
                 return
             }
@@ -316,13 +344,31 @@ struct SecurityDetailView: View {
             analystErrorMessage = nil
             defer { isLoadingAnalysis = false }
 
-            let snapshot = try await AnalystDataClient.shared.snapshot(for: symbol, apiKey: apiKey)
-            AnalystSnapshotCache.save(snapshot, requestedSymbol: symbol)
-            analystSnapshot = snapshot
+            var loaded: [AnalystSnapshot] = []
+            var failures: [String] = []
+            for provider in AnalystProvider.allCases {
+                guard let apiKey = keys[provider] else { continue }
+                do {
+                    let snapshot = try await AnalystDataClient.shared.snapshot(
+                        for: symbol,
+                        apiKey: apiKey,
+                        provider: provider
+                    )
+                    AnalystSnapshotCache.save(snapshot, requestedSymbol: symbol)
+                    loaded.append(snapshot)
+                } catch {
+                    failures.append("\(provider.title) : \(error.localizedDescription)")
+                    if let cached = AnalystSnapshotCache.load(symbol: symbol, provider: provider, allowExpired: true) {
+                        loaded.append(cached)
+                    }
+                }
+            }
+            analystSnapshots = loaded
+            analystErrorMessage = failures.isEmpty ? nil : failures.joined(separator: " · ")
         } catch {
             analystErrorMessage = error.localizedDescription
-            if analystSnapshot == nil {
-                analystSnapshot = AnalystSnapshotCache.load(symbol: symbol, allowExpired: true)
+            if analystSnapshots.isEmpty {
+                analystSnapshots = AnalystSnapshotCache.loadAll(symbol: symbol, allowExpired: true)
             }
         }
     }

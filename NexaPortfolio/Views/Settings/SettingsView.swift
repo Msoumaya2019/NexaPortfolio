@@ -102,7 +102,7 @@ struct SettingsView: View {
                         Label("Analystes et avis IA", systemImage: "sparkles")
                     }
 
-                    Text("Affiche séparément les objectifs et consensus Alpha Vantage, puis l’avis du modèle local de Nexa pour chaque action.")
+                    Text("Combine Twelve Data, Finnhub et Alpha Vantage, affiche chaque source séparément, puis calcule l’avis local de Nexa pour tes positions et les titres suivis.")
                         .font(.footnote)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -115,7 +115,7 @@ struct SettingsView: View {
                 }
 
                 Section("Application") {
-                    LabeledContent("Version", value: "2.6.0")
+                    LabeledContent("Version", value: "2.7.0")
                     Label("Stockage privé sur cet appareil", systemImage: "lock.shield")
                     Label("Aucune limite de listes ou d’opérations", systemImage: "infinity")
                 }

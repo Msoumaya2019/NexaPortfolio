@@ -30,7 +30,8 @@ Nexa Portfolio est une application SwiftUI originale de suivi d’investissement
 - conservation chiffrée de la session BoursoBank dans le Trousseau iOS pour une synchronisation silencieuse au lancement et au retour dans l’application ;
 - compatibilité avec l’identifiant réel des PEA BoursoBank et le format actuel de l’endpoint de synthèse (correctif 2.0.1) ;
 - synchronisation BoursoBank des contrats d’assurance-vie : solde actualisé et supports détaillés lorsqu’ils sont fournis par la page du contrat ;
-- avis des analystes avec objectif moyen et consensus sourcés auprès d’Alpha Vantage ;
+- avis des analystes avec objectifs, consensus et ratios provenant séparément de Twelve Data, Finnhub et Alpha Vantage ;
+- rubrique **Opportunités à étudier** pour comparer une sélection de grandes valeurs du Nasdaq-100, du S&P 500 et du CAC 40 ;
 - avis IA local affiché séparément, avec score, confiance, facteurs favorables et points de vigilance ;
 - graphiques de répartition avec Swift Charts ;
 - stockage privé sur l’iPhone avec SwiftData ;
@@ -90,14 +91,16 @@ Un portefeuille Trading 212 séparé est recommandé afin d’éviter qu’une a
 
 Les données et calculs sont indicatifs et ne constituent pas un conseil financier.
 
-## Avis des analystes et avis IA
+## Sources d’analystes, opportunités et avis IA
 
-Dans **Réglages > Analystes et avis IA**, crée puis enregistre une clé API personnelle Alpha Vantage. La clé reste dans le Trousseau iOS. Sur la fiche de chaque action, Nexa présente ensuite deux catégories volontairement séparées :
+Dans **Réglages > Analystes et avis IA**, enregistre une ou plusieurs clés personnelles Twelve Data, Finnhub ou Alpha Vantage. Chaque clé reste dans le Trousseau iOS. Sur la fiche de chaque action possédée ou suivie, Nexa présente ensuite des catégories volontairement séparées :
 
-1. **Avis des analystes — Alpha Vantage** : objectif moyen, potentiel par rapport au cours et répartition des recommandations fournis par Alpha Vantage ;
-2. **Avis IA — Nexa** : score multifactoriel calculé localement à partir des indicateurs disponibles, accompagné de son niveau de confiance et de ses principaux facteurs.
+1. une carte par fournisseur configuré avec son objectif, son consensus, ses ratios et sa date de mise à jour ;
+2. **Avis IA — Nexa** : score multifactoriel calculé localement à partir des indicateurs réellement disponibles, accompagné de son niveau de confiance et de ses principaux facteurs.
 
-L’avis IA n’invente pas d’objectif de cours et n’est jamais présenté comme une recommandation Alpha Vantage. Les résultats sont mis en cache pendant 24 heures. La couverture dépend du fournisseur : certains titres, ETF ou marchés secondaires peuvent ne pas disposer de données. Ces deux avis sont informatifs, peuvent être incomplets ou erronés et ne constituent pas un conseil financier.
+Dans **Suivi > Opportunités**, l’app analyse une sélection représentative de grandes capitalisations du Nasdaq-100, du S&P 500 ou du CAC 40. Elle classe les titres selon plusieurs facteurs de valorisation et de qualité, sans les transformer en ordres d’achat. Twelve Data est prioritaire pour ce classement, puis Finnhub et Alpha Vantage servent de repli selon les clés configurées.
+
+L’avis IA n’invente pas d’objectif de cours et n’est jamais présenté comme une recommandation d’un fournisseur. Les résultats sont mis en cache pendant 24 heures. La couverture dépend des abonnements : certains titres, ETF ou marchés peuvent ne disposer d’aucune donnée. Les avis sont informatifs, peuvent être incomplets ou erronés et ne constituent pas un conseil financier.
 
 ## Import DEGIRO
 
