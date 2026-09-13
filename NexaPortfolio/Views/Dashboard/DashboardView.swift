@@ -39,6 +39,7 @@ struct DashboardView: View {
     @State private var boursoBankSyncInProgress = false
     @State private var historicalPerformance: PortfolioPerformanceSnapshot?
     @State private var isLoadingPerformance = false
+    @State private var editingHolding: Holding?
 
     private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
     private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
@@ -79,7 +80,7 @@ struct DashboardView: View {
                     return lhs.marketValueInPortfolioCurrency > rhs.marketValueInPortfolioCurrency
                 }
             case .alphabetical:
-                let comparison = lhs.symbol.localizedCaseInsensitiveCompare(rhs.symbol)
+                let comparison = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
                 if comparison != .orderedSame { return comparison == .orderedAscending }
             case .dividendYield:
                 if lhs.dividendYieldPercent != rhs.dividendYieldPercent {
@@ -175,6 +176,9 @@ struct DashboardView: View {
                 .disabled(marketData.isRefreshing)
                 .accessibilityLabel("Actualiser les cours")
             }
+        }
+        .sheet(item: $editingHolding) { holding in
+            HoldingEditor(holding: holding)
         }
         .alert("Actualisation", isPresented: Binding(
             get: { marketData.errorMessage != nil },
@@ -375,7 +379,7 @@ struct DashboardView: View {
                         angularInset: 2
                     )
                     .cornerRadius(4)
-                    .foregroundStyle(by: .value("Symbole", holding.symbol))
+                    .foregroundStyle(by: .value("Action", holding.displayName))
                 }
                 .chartLegend(.hidden)
                 .frame(width: 126, height: 126)
@@ -386,8 +390,9 @@ struct DashboardView: View {
                             Circle()
                                 .fill(AppTheme.allocationColors[index % AppTheme.allocationColors.count])
                                 .frame(width: 8, height: 8)
-                            Text(holding.symbol)
+                            Text(holding.displayName)
                                 .font(.caption.weight(.semibold))
+                                .lineLimit(1)
                             Spacer()
                             Text(totalValue > 0 ? holding.marketValueInPortfolioCurrency / totalValue : 0, format: .percent.precision(.fractionLength(1)))
                                 .font(.caption.monospacedDigit())
@@ -426,18 +431,13 @@ struct DashboardView: View {
                 HStack(spacing: 12) {
                     SymbolBadge(symbol: holding.symbol)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(holding.symbol)
-                            .font(.subheadline.weight(.bold))
                         Text(holding.displayName)
-                            .font(.caption)
+                            .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
+                        Text(positionSubtitle(for: holding))
+                            .font(.caption2)
                             .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
-                        if let portfolioName = holding.portfolio?.name, !portfolioName.isEmpty {
-                            Text(portfolioName)
-                                .font(.caption2)
-                                .foregroundStyle(AppTheme.secondaryText)
-                                .lineLimit(1)
-                        }
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
@@ -467,6 +467,16 @@ struct DashboardView: View {
                                 .foregroundStyle(AppTheme.secondaryText)
                         }
                     }
+                    Button {
+                        editingHolding = holding
+                    } label: {
+                        Image(systemName: "pencil.circle")
+                            .font(.title3)
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 30, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Modifier le nom de \(holding.displayName)")
                 }
 
                 if index < positions.count - 1 {
@@ -513,8 +523,9 @@ struct DashboardView: View {
             } else {
                 ForEach(dividendHoldings.prefix(3)) { holding in
                     HStack {
-                        Text(holding.symbol)
+                        Text(holding.displayName)
                             .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
                         Text(holding.dividendYieldPercent / 100, format: .percent.precision(.fractionLength(2)))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(AppTheme.accent)
@@ -547,7 +558,7 @@ struct DashboardView: View {
                             .frame(width: 36, height: 36)
                             .background(AppTheme.accent.opacity(0.1), in: Circle())
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("\(transaction.kind.title) · \(transaction.symbol)")
+                            Text("\(transaction.kind.title) · \(displayName(for: transaction))")
                                 .font(.subheadline.weight(.semibold))
                             Text(transaction.date, format: .dateTime.day().month(.abbreviated).year())
                                 .font(.caption)
@@ -566,6 +577,17 @@ struct DashboardView: View {
     private func refreshQuotes() async {
         await marketData.refresh(holdings: holdings, watchlistItems: watchlistItems, context: modelContext)
         await loadSelectedPerformance()
+    }
+
+    private func positionSubtitle(for holding: Holding) -> String {
+        let portfolioName = holding.portfolio?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return portfolioName.isEmpty ? holding.symbol : "\(holding.symbol) · \(portfolioName)"
+    }
+
+    private func displayName(for transaction: TradeTransaction) -> String {
+        holdings.first {
+            $0.symbol == transaction.symbol && $0.portfolio?.id == transaction.portfolio?.id
+        }?.displayName ?? transaction.displayName
     }
 
     @MainActor

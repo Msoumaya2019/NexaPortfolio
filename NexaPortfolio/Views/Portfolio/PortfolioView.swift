@@ -107,7 +107,7 @@ struct PortfolioView: View {
             }
         }
         .sheet(item: $editingHolding) { holding in
-            PurchasePriceEditor(holding: holding)
+            HoldingEditor(holding: holding)
         }
         .confirmationDialog(
             "Supprimer « \(selectedPortfolio?.name ?? "") » ?",
@@ -497,7 +497,7 @@ private enum PurchaseValueInputMode: String, CaseIterable, Identifiable {
     }
 }
 
-private struct PurchasePriceEditor: View {
+struct HoldingEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
