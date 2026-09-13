@@ -42,36 +42,13 @@ struct DashboardView: View {
 
     private var primaryCurrency: String { portfolios.first?.currencyCode ?? "EUR" }
     private var totalValue: Double { portfolios.reduce(0) { $0 + $1.totalValue } }
-    private var totalCost: Double { portfolios.reduce(0) { $0 + $1.costBasis } }
-    private var totalGain: Double { totalValue - portfolios.reduce(0) { $0 + $1.cashBalance } - totalCost }
-    private var dailyGain: Double {
-        holdings.reduce(0) {
-            $0 + ($1.currentPrice - $1.previousClose) * $1.quantity * $1.fxRateToPortfolioCurrency
-        }
-    }
-
-    private var dailyGainPercent: Double {
-        let previousValue = holdings.reduce(0) {
-            $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
-        } + portfolios.reduce(0) { $0 + $1.cashBalance }
-        guard previousValue > 0 else { return 0 }
-        return dailyGain / previousValue * 100
-    }
-
+    private var totalGain: Double { holdings.reduce(0) { $0 + $1.unrealizedGain } }
     private var selectedPerformancePeriod: PortfolioPerformancePeriod {
         PortfolioPerformancePeriod(rawValue: performancePeriodRawValue) ?? .oneDay
     }
 
     private var displayedPerformance: PortfolioPerformanceSnapshot? {
-        switch selectedPerformancePeriod {
-        case .sinceInception:
-            guard totalCost > 0 else { return PortfolioPerformanceSnapshot(amount: 0, percent: 0) }
-            return PortfolioPerformanceSnapshot(amount: totalGain, percent: totalGain / totalCost * 100)
-        case .oneDay:
-            return PortfolioPerformanceSnapshot(amount: dailyGain, percent: dailyGainPercent)
-        case .sixMonths, .threeMonths, .oneMonth, .oneWeek:
-            return historicalPerformance
-        }
+        historicalPerformance
     }
 
     private var estimatedAnnualDividendIncome: Double {
@@ -89,7 +66,12 @@ struct DashboardView: View {
     }
 
     private var sortedPositions: [Holding] {
-        let positions = holdings.filter { $0.quantity > 0 }
+        let positions = Array(
+            holdings
+                .filter { $0.quantity > 0 }
+                .sorted { $0.marketValueInPortfolioCurrency > $1.marketValueInPortfolioCurrency }
+                .prefix(25)
+        )
         return positions.sorted { lhs, rhs in
             switch positionSort {
             case .value:
@@ -157,7 +139,7 @@ struct DashboardView: View {
                 await refreshQuotes()
             }
         }
-        .task(id: performancePeriodRawValue) {
+        .task(id: performanceTaskID) {
             await loadSelectedPerformance()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -422,9 +404,9 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Toutes les positions")
+                    Text("Principales positions")
                         .font(.headline)
-                    Text("\(sortedPositions.count) position\(sortedPositions.count > 1 ? "s" : "")")
+                    Text("\(sortedPositions.count) affichée\(sortedPositions.count > 1 ? "s" : "") sur \(holdings.filter { $0.quantity > 0 }.count)")
                         .font(.caption)
                         .foregroundStyle(AppTheme.secondaryText)
                 }
@@ -588,18 +570,18 @@ struct DashboardView: View {
 
     @MainActor
     private func loadSelectedPerformance() async {
-        guard let startDate = selectedPerformancePeriod.startDate else {
-            historicalPerformance = nil
-            isLoadingPerformance = false
-            return
-        }
-
         isLoadingPerformance = true
         defer { isLoadingPerformance = false }
         historicalPerformance = await marketData.performance(
-            holdings: holdings,
-            cashBalance: portfolios.reduce(0) { $0 + $1.cashBalance },
-            since: startDate
+            portfolios: portfolios,
+            since: selectedPerformancePeriod.startDate
         )
+    }
+
+    private var performanceTaskID: String {
+        let positionSignature = holdings.reduce(0) {
+            $0 + $1.currentPrice + $1.quantity + $1.purchasePrice
+        }
+        return "\(performancePeriodRawValue)-\(transactions.count)-\(positionSignature)"
     }
 }

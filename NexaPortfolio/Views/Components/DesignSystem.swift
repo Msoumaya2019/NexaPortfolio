@@ -53,8 +53,10 @@ enum PortfolioPerformancePeriod: String, CaseIterable, Identifiable {
     var startDate: Date? {
         let calendar = Calendar.current
         switch self {
-        case .sinceInception, .oneDay:
+        case .sinceInception:
             return nil
+        case .oneDay:
+            return calendar.date(byAdding: .day, value: -1, to: .now)
         case .sixMonths:
             return calendar.date(byAdding: .month, value: -6, to: .now)
         case .threeMonths:

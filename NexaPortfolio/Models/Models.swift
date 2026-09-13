@@ -57,6 +57,7 @@ final class Holding {
     @Attribute(.unique) var id: UUID
     var symbol: String
     var displayName: String
+    var manualDisplayName: String? = nil
     var quantity: Double
     var averageCost: Double
     var manualAverageCost: Double? = nil
@@ -96,6 +97,7 @@ final class Holding {
         self.id = UUID()
         self.symbol = symbol.uppercased()
         self.displayName = displayName
+        self.manualDisplayName = nil
         self.quantity = quantity
         self.averageCost = averageCost
         self.manualAverageCost = nil

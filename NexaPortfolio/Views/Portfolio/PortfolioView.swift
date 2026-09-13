@@ -25,7 +25,11 @@ struct PortfolioView: View {
     }
 
     private var performanceTaskID: String {
-        "\(selectedPortfolio?.id.uuidString ?? "aucun")-\(performancePeriodRawValue)"
+        guard let portfolio = selectedPortfolio else { return "aucun-\(performancePeriodRawValue)" }
+        let positionSignature = portfolio.holdings.reduce(0) {
+            $0 + $1.currentPrice + $1.quantity + $1.purchasePrice
+        }
+        return "\(portfolio.id.uuidString)-\(performancePeriodRawValue)-\(portfolio.transactions.count)-\(positionSignature)"
     }
 
     var body: some View {
@@ -181,7 +185,7 @@ struct PortfolioView: View {
                 summaryMetric("Liquidités", portfolio.cashBalance.currency(portfolio.currencyCode))
                 Spacer()
                 summaryMetric(
-                    "Gain/perte",
+                    "Non réalisé",
                     portfolio.unrealizedGain.currency(portfolio.currencyCode),
                     color: portfolio.unrealizedGain >= 0 ? AppTheme.positive : AppTheme.negative
                 )
@@ -204,24 +208,7 @@ struct PortfolioView: View {
     }
 
     private func displayedPerformance(for portfolio: Portfolio) -> PortfolioPerformanceSnapshot? {
-        switch selectedPerformancePeriod {
-        case .sinceInception:
-            return PortfolioPerformanceSnapshot(
-                amount: portfolio.unrealizedGain,
-                percent: portfolio.unrealizedGainPercent
-            )
-        case .oneDay:
-            let previousValue = portfolio.cashBalance + portfolio.holdings.reduce(0) {
-                $0 + $1.previousClose * $1.quantity * $1.fxRateToPortfolioCurrency
-            }
-            guard previousValue > 0 else {
-                return PortfolioPerformanceSnapshot(amount: 0, percent: 0)
-            }
-            let amount = portfolio.totalValue - previousValue
-            return PortfolioPerformanceSnapshot(amount: amount, percent: amount / previousValue * 100)
-        case .sixMonths, .threeMonths, .oneMonth, .oneWeek:
-            return historicalPerformance
-        }
+        historicalPerformance
     }
 
     private func performanceSelection(for portfolio: Portfolio) -> some View {
@@ -246,9 +233,7 @@ struct PortfolioView: View {
 
     @MainActor
     private func loadSelectedPortfolioPerformance() async {
-        guard let portfolio = selectedPortfolio,
-              let startDate = selectedPerformancePeriod.startDate
-        else {
+        guard let portfolio = selectedPortfolio else {
             historicalPerformance = nil
             isLoadingPerformance = false
             return
@@ -258,8 +243,9 @@ struct PortfolioView: View {
         defer { isLoadingPerformance = false }
         historicalPerformance = await marketData.performance(
             holdings: portfolio.holdings,
-            cashBalance: portfolio.cashBalance,
-            since: startDate
+            transactions: portfolio.transactions,
+            portfolioCurrencyCode: portfolio.currencyCode,
+            since: selectedPerformancePeriod.startDate
         )
     }
 
@@ -381,9 +367,10 @@ struct PortfolioView: View {
                 HStack(spacing: 12) {
                     SymbolBadge(symbol: holding.symbol)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(holding.symbol)
+                        Text(holding.displayName)
                             .font(.subheadline.weight(.bold))
-                        Text("\(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres · PRU \(holding.purchasePrice.currency(holding.currencyCode))")
+                            .lineLimit(1)
+                        Text("\(holding.symbol) · \(holding.quantity.formatted(.number.precision(.fractionLength(0...4)))) titres · PRU \(holding.purchasePrice.currency(holding.currencyCode))")
                             .font(.caption)
                             .foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(1)
@@ -409,14 +396,22 @@ struct PortfolioView: View {
                     .foregroundStyle(AppTheme.accent)
                     .frame(width: 34, height: 42)
             }
-            .accessibilityLabel("Modifier le prix d’achat de \(holding.symbol)")
+            .accessibilityLabel("Modifier la position \(holding.symbol)")
         }
     }
 
     private func transactionsCard(_ portfolio: Portfolio) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Historique")
-                .font(.headline)
+            HStack {
+                Text("Historique")
+                    .font(.headline)
+                Spacer()
+                if portfolio.transactions.count > 20 {
+                    Text("20 dernières")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
 
             if portfolio.transactions.isEmpty {
                 Text("Les achats, ventes et dividendes apparaîtront ici.")
@@ -424,7 +419,7 @@ struct PortfolioView: View {
                     .foregroundStyle(AppTheme.secondaryText)
                     .padding(.vertical, 12)
             } else {
-                ForEach(portfolio.transactions.sorted { $0.date > $1.date }) { transaction in
+                ForEach(portfolio.transactions.sorted { $0.date > $1.date }.prefix(20)) { transaction in
                     HStack(spacing: 12) {
                         Image(systemName: transaction.kind.systemImage)
                             .foregroundStyle(AppTheme.accent)
@@ -510,6 +505,9 @@ private struct PurchasePriceEditor: View {
 
     @State private var inputMode: PurchaseValueInputMode = .pricePerShare
     @State private var amountText: String
+    @State private var priceWasEdited = false
+    @State private var displayNameText: String
+    @State private var nameWasEdited = false
     @State private var errorMessage: String?
 
     init(holding: Holding) {
@@ -519,10 +517,17 @@ private struct PurchasePriceEditor: View {
                 .number.precision(.fractionLength(2...6))
             )
         )
+        _displayNameText = State(initialValue: holding.displayName)
     }
 
     private var parsedAmount: Double? {
-        Double(amountText.replacingOccurrences(of: ",", with: "."))
+        Double(
+            amountText
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "\u{00A0}", with: "")
+                .replacingOccurrences(of: "\u{202F}", with: "")
+                .replacingOccurrences(of: ",", with: ".")
+        )
     }
 
     private var editedPurchasePrice: Double? {
@@ -552,6 +557,26 @@ private struct PurchasePriceEditor: View {
                     LabeledContent("Devise", value: holding.currencyCode)
                 }
 
+                Section("Nom affiché") {
+                    TextField("Nom compréhensible", text: $displayNameText)
+                        .onChange(of: displayNameText) {
+                            nameWasEdited = true
+                        }
+
+                    Text("Ce nom est uniquement utilisé dans Nexa. Le symbole boursier et la synchronisation restent inchangés.")
+                        .font(.footnote)
+                        .foregroundStyle(AppTheme.secondaryText)
+
+                    if holding.manualDisplayName != nil || holding.displayName != holding.symbol {
+                        Button {
+                            displayNameText = ""
+                            nameWasEdited = true
+                        } label: {
+                            Label("Utiliser le nom automatique", systemImage: "arrow.counterclockwise")
+                        }
+                    }
+                }
+
                 Section("Valeur d’achat") {
                     Picker("Mode de saisie", selection: $inputMode) {
                         ForEach(PurchaseValueInputMode.allCases) { mode in
@@ -577,6 +602,9 @@ private struct PurchasePriceEditor: View {
                         text: $amountText
                     )
                     .keyboardType(.decimalPad)
+                    .onChange(of: amountText) {
+                        priceWasEdited = true
+                    }
 
                     LabeledContent(
                         "Prix moyen obtenu",
@@ -602,7 +630,7 @@ private struct PurchasePriceEditor: View {
                     }
                 }
             }
-            .navigationTitle("Modifier \(holding.symbol)")
+            .navigationTitle("Modifier la position")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -610,7 +638,7 @@ private struct PurchasePriceEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Enregistrer") { save() }
-                        .disabled(editedPurchasePrice == nil)
+                        .disabled(priceWasEdited && editedPurchasePrice == nil)
                 }
             }
             .alert("Modification impossible", isPresented: Binding(
@@ -625,8 +653,15 @@ private struct PurchasePriceEditor: View {
     }
 
     private func save() {
-        guard let editedPurchasePrice else { return }
-        holding.manualAverageCost = editedPurchasePrice
+        if priceWasEdited {
+            guard let editedPurchasePrice else { return }
+            holding.manualAverageCost = editedPurchasePrice
+        }
+        if nameWasEdited {
+            let name = displayNameText.trimmingCharacters(in: .whitespacesAndNewlines)
+            holding.manualDisplayName = name.isEmpty ? nil : name
+            holding.displayName = name.isEmpty ? holding.symbol : name
+        }
         do {
             try modelContext.save()
             dismiss()

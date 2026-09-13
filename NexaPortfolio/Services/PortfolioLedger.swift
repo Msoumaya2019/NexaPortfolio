@@ -41,6 +41,7 @@ enum PortfolioLedger {
         let nextDividendDateIsEstimated: Bool
         let paymentCount: Int
         let manualAverageCost: Double?
+        let manualDisplayName: String?
     }
 
     @MainActor
@@ -78,7 +79,9 @@ enum PortfolioLedger {
                 if holding.currentPrice == 0 { holding.currentPrice = price }
                 if holding.previousClose == 0 { holding.previousClose = price }
                 holding.currencyCode = currencyCode
-                if !displayName.isEmpty { holding.displayName = displayName }
+                if !displayName.isEmpty, holding.manualDisplayName == nil {
+                    holding.displayName = displayName
+                }
             } else {
                 let holding = Holding(
                     symbol: normalizedSymbol,
@@ -155,7 +158,8 @@ enum PortfolioLedger {
                 nextDividendDate: $0.nextDividendDate,
                 nextDividendDateIsEstimated: $0.nextDividendDateIsEstimated,
                 paymentCount: $0.dividendPaymentsLastTwelveMonths,
-                manualAverageCost: $0.manualAverageCost
+                manualAverageCost: $0.manualAverageCost,
+                manualDisplayName: $0.manualDisplayName
             ))
         })
 
@@ -232,6 +236,10 @@ enum PortfolioLedger {
             holding.fxRateToPortfolioCurrency = snapshot?.fxRate ?? 1
             holding.lastUpdated = snapshot?.lastUpdated
             holding.manualAverageCost = snapshot?.manualAverageCost
+            holding.manualDisplayName = snapshot?.manualDisplayName
+            if let manualDisplayName = snapshot?.manualDisplayName {
+                holding.displayName = manualDisplayName
+            }
             context.insert(holding)
         }
 

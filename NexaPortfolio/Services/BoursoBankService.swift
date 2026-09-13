@@ -1361,7 +1361,9 @@ enum BoursoBankImporter {
                 created += 1
             }
             holding.symbol = position.marketSymbol.uppercased()
-            holding.displayName = position.displayName
+            if holding.manualDisplayName == nil {
+                holding.displayName = position.displayName
+            }
             holding.quantity = position.quantity
             holding.averageCost = position.averageCost
             holding.currentPrice = position.currentPrice

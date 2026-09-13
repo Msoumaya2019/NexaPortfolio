@@ -455,7 +455,9 @@ enum Trading212Importer {
                 )
                 context.insert(holding)
             }
-            holding.displayName = position.instrument.name ?? holding.displayName
+            if holding.manualDisplayName == nil {
+                holding.displayName = position.instrument.name ?? holding.displayName
+            }
             holding.quantity = position.quantity
             holding.averageCost = position.averagePricePaid
             holding.currentPrice = position.currentPrice
